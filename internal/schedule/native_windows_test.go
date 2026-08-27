@@ -50,6 +50,8 @@ func TestNativeWindowsTaskLifecycle(t *testing.T) {
 	first := Definition{Executable: executable, LocalTime: "09:05"}
 	inspection, err := manager.Install(ctx, first)
 	if err != nil {
+		queried, queryErr := schedulerCommand(ctx, "schtasks.exe", "/Query", "/TN", "\\"+identifier, "/XML")
+		t.Logf("queried task XML (err=%v): %q", queryErr, queried)
 		t.Fatal(err)
 	}
 	if !inspection.Installed || !inspection.Managed || !inspection.Enabled || !inspection.Matches {
