@@ -29,7 +29,6 @@ target = "kimi-code"
 
 [jobs.openrouter-kimi-code.policy]
 include_free = false
-include_discounted = false
 
 [jobs.zenmux-kimi-code]
 enabled = true
@@ -40,7 +39,6 @@ min_context = 200000
 
 [jobs.zenmux-kimi-code.policy]
 include_free = true
-include_discounted = false
 `
 
 func TestDecodeAppliesJobDefaultsAndPriority(t *testing.T) {
@@ -75,7 +73,7 @@ func TestDefaultConfigurationSavesAndLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Jobs["openrouter-kimi-code"].Policy.IncludeFree || loaded.Jobs["openrouter-kimi-code"].Policy.IncludeDiscounted {
+	if loaded.Jobs["openrouter-kimi-code"].Policy.IncludeFree {
 		t.Fatal("default configuration widened model eligibility")
 	}
 	information, err := os.Stat(path)
@@ -104,15 +102,11 @@ func TestDecodeRejectsUnknownPolicyField(t *testing.T) {
 	}
 }
 
-func TestDiscountedPolicyRequiresValidCeilings(t *testing.T) {
+func TestDecodeRejectsRemovedDiscountedFields(t *testing.T) {
 	t.Parallel()
-	withoutCeilings := strings.Replace(validConfig, "include_discounted = false", "include_discounted = true", 1)
-	if _, err := Decode(strings.NewReader(withoutCeilings)); err == nil {
-		t.Fatal("discounted policy without ceilings was accepted")
-	}
-
-	withCeilings := strings.Replace(withoutCeilings, "include_discounted = true", "include_discounted = true\nprice_ceilings = { \"prompt|per_token|USD\" = \"0.000001\" }", 1)
-	if _, err := Decode(strings.NewReader(withCeilings)); err != nil {
-		t.Fatalf("discounted policy with a valid ceiling: %v", err)
+	input := validConfig + "\n[jobs.zenmux-kimi-code.policy]\ninclude_discounted = true\n"
+	input = strings.Replace(input, "[jobs.zenmux-kimi-code.policy]\ninclude_free = true\n", "", 1)
+	if _, err := Decode(strings.NewReader(input)); err == nil {
+		t.Fatal("removed discounted policy field was accepted")
 	}
 }

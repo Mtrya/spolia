@@ -7,11 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/Mtrya/llmloot/internal/atomicfile"
-	"github.com/Mtrya/llmloot/internal/model"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -50,9 +48,7 @@ type Job struct {
 }
 
 type Policy struct {
-	IncludeFree       bool              `toml:"include_free"`
-	IncludeDiscounted bool              `toml:"include_discounted"`
-	PriceCeilings     map[string]string `toml:"price_ceilings"`
+	IncludeFree bool `toml:"include_free"`
 }
 
 func Load(path string) (Config, error) {
@@ -192,14 +188,6 @@ func (configuration Config) Validate() error {
 			return fmt.Errorf("jobs %q and %q bind the same source and target", previous, jobName)
 		}
 		pairs[pair] = jobName
-		if job.Policy.IncludeDiscounted && len(job.Policy.PriceCeilings) == 0 {
-			return fmt.Errorf("job %q enables discounted models without price_ceilings", jobName)
-		}
-		for key, value := range job.Policy.PriceCeilings {
-			if err := validateCeiling(key, value); err != nil {
-				return fmt.Errorf("job %q: %w", jobName, err)
-			}
-		}
 	}
 	return nil
 }
@@ -255,19 +243,4 @@ func applyDefaults(configuration *Config) {
 		}
 		configuration.Jobs[name] = job
 	}
-}
-
-func validateCeiling(key, value string) error {
-	parts := strings.Split(key, "|")
-	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
-		return fmt.Errorf("price ceiling key %q must be dimension|unit|currency", key)
-	}
-	decimal, err := model.ParseDecimal(value)
-	if err != nil {
-		return fmt.Errorf("price ceiling %q is invalid: %w", key, err)
-	}
-	if decimal.Sign() < 0 {
-		return fmt.Errorf("price ceiling %q must be non-negative", key)
-	}
-	return nil
 }

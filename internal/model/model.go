@@ -14,9 +14,8 @@ const (
 type EligibilityClass string
 
 const (
-	ClassStealth    EligibilityClass = "stealth"
-	ClassFree       EligibilityClass = "free"
-	ClassDiscounted EligibilityClass = "discounted"
+	ClassStealth EligibilityClass = "stealth"
+	ClassFree    EligibilityClass = "free"
 )
 
 type Price struct {

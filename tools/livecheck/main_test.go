@@ -10,22 +10,18 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-func TestLivePoliciesRequireExplicitWideningAndCeilings(t *testing.T) {
+func TestLivePoliciesRequireExplicitWidening(t *testing.T) {
 	t.Parallel()
 	stealth, err := configuredPolicy(policyFlags{name: "stealth"})
-	if err != nil || stealth.IncludeFree || stealth.IncludeDiscounted {
+	if err != nil || stealth.IncludeFree {
 		t.Fatalf("stealth = %#v, err = %v", stealth, err)
 	}
 	free, err := configuredPolicy(policyFlags{name: "free"})
-	if err != nil || !free.IncludeFree || free.IncludeDiscounted {
+	if err != nil || !free.IncludeFree {
 		t.Fatalf("free = %#v, err = %v", free, err)
 	}
 	if _, err := configuredPolicy(policyFlags{name: "discounted"}); err == nil {
-		t.Fatal("discounted policy without ceilings was accepted")
-	}
-	discounted, err := configuredPolicy(policyFlags{name: "discounted", ceilings: map[string]string{"prompt|per_token|USD": "0.1"}})
-	if err != nil || discounted.IncludeFree || !discounted.IncludeDiscounted {
-		t.Fatalf("discounted = %#v, err = %v", discounted, err)
+		t.Fatal("discounted policy was accepted")
 	}
 }
 

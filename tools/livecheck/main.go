@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -32,58 +31,23 @@ type report struct {
 }
 
 type cellReport struct {
-	Source           string            `json:"source"`
-	Policy           string            `json:"policy"`
-	PriceCeilings    map[string]string `json:"price_ceilings,omitempty"`
-	SelectedModel    string            `json:"selected_model,omitempty"`
-	EligibilityClass string            `json:"eligibility_class,omitempty"`
-	LLMlootVersion   string            `json:"llmloot_version"`
-	KimiCodeVersion  string            `json:"kimi_code_version"`
-	OS               string            `json:"os"`
-	Architecture     string            `json:"architecture"`
-	SetupOutcome     string            `json:"setup_outcome,omitempty"`
-	SyncOutcome      string            `json:"sync_outcome,omitempty"`
-	ModelActivation  string            `json:"model_activation,omitempty"`
-	ToolUseSuccess   bool              `json:"tool_use_success"`
-	Error            string            `json:"error,omitempty"`
+	Source           string `json:"source"`
+	Policy           string `json:"policy"`
+	SelectedModel    string `json:"selected_model,omitempty"`
+	EligibilityClass string `json:"eligibility_class,omitempty"`
+	LLMlootVersion   string `json:"llmloot_version"`
+	KimiCodeVersion  string `json:"kimi_code_version"`
+	OS               string `json:"os"`
+	Architecture     string `json:"architecture"`
+	SetupOutcome     string `json:"setup_outcome,omitempty"`
+	SyncOutcome      string `json:"sync_outcome,omitempty"`
+	ModelActivation  string `json:"model_activation,omitempty"`
+	ToolUseSuccess   bool   `json:"tool_use_success"`
+	Error            string `json:"error,omitempty"`
 }
 
 type policyFlags struct {
-	name     string
-	ceilings map[string]string
-}
-
-type ceilingFlag map[string]string
-
-func (value *ceilingFlag) String() string {
-	if value == nil || len(*value) == 0 {
-		return ""
-	}
-	keys := make([]string, 0, len(*value))
-	for key := range *value {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		parts = append(parts, key+"="+(*value)[key])
-	}
-	return strings.Join(parts, ",")
-}
-
-func (value *ceilingFlag) Set(text string) error {
-	key, amount, found := strings.Cut(text, "=")
-	if !found || key == "" || amount == "" {
-		return fmt.Errorf("ceiling must be dimension|unit|currency=value")
-	}
-	if *value == nil {
-		*value = make(map[string]string)
-	}
-	if _, exists := (*value)[key]; exists {
-		return fmt.Errorf("duplicate ceiling %q", key)
-	}
-	(*value)[key] = amount
-	return nil
+	name string
 }
 
 func main() {
@@ -91,11 +55,8 @@ func main() {
 	selectedModel := flag.String("model", "", "exact eligible model to validate; requires a single source")
 	llmlootFlag := flag.String("llmloot", "llmloot", "llmloot binary to validate")
 	kimiFlag := flag.String("kimi", "kimi", "Kimi Code binary to use")
-	openRouterPolicy := flag.String("openrouter-policy", "stealth", "openrouter policy: stealth, free, discounted, or free+discounted")
-	zenMuxPolicy := flag.String("zenmux-policy", "stealth", "zenmux policy: stealth, free, discounted, or free+discounted")
-	var openRouterCeilings, zenMuxCeilings ceilingFlag
-	flag.Var(&openRouterCeilings, "openrouter-ceiling", "repeatable OpenRouter ceiling dimension|unit|currency=value")
-	flag.Var(&zenMuxCeilings, "zenmux-ceiling", "repeatable ZenMux ceiling dimension|unit|currency=value")
+	openRouterPolicy := flag.String("openrouter-policy", "stealth", "openrouter policy: stealth or free")
+	zenMuxPolicy := flag.String("zenmux-policy", "stealth", "zenmux policy: stealth or free")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		flag.Usage()
@@ -112,8 +73,8 @@ func main() {
 		fatal(errors.New("an exact model requires a single source"))
 	}
 	policies := map[string]policyFlags{
-		"openrouter": {name: *openRouterPolicy, ceilings: openRouterCeilings},
-		"zenmux":     {name: *zenMuxPolicy, ceilings: zenMuxCeilings},
+		"openrouter": {name: *openRouterPolicy},
+		"zenmux":     {name: *zenMuxPolicy},
 	}
 	for _, source := range sources {
 		if _, err := configuredPolicy(policies[source]); err != nil {
@@ -161,7 +122,7 @@ func main() {
 
 func runCell(sourceName string, policy policyFlags, requestedModel, llmloot, kimi, llmlootVersion, kimiVersion string) cellReport {
 	cell := cellReport{
-		Source: sourceName, Policy: policy.name, PriceCeilings: cloneMap(policy.ceilings), LLMlootVersion: llmlootVersion,
+		Source: sourceName, Policy: policy.name, LLMlootVersion: llmlootVersion,
 		KimiCodeVersion: kimiVersion, OS: runtime.GOOS, Architecture: runtime.GOARCH,
 	}
 	credential := os.Getenv(credentialEnvironment(sourceName))
@@ -318,26 +279,14 @@ func requestedSources(name string) ([]string, error) {
 }
 
 func configuredPolicy(flags policyFlags) (config.Policy, error) {
-	policy := config.Policy{PriceCeilings: cloneMap(flags.ceilings)}
 	switch flags.name {
 	case "stealth":
+		return config.Policy{}, nil
 	case "free":
-		policy.IncludeFree = true
-	case "discounted":
-		policy.IncludeDiscounted = true
-	case "free+discounted":
-		policy.IncludeFree = true
-		policy.IncludeDiscounted = true
+		return config.Policy{IncludeFree: true}, nil
 	default:
 		return config.Policy{}, fmt.Errorf("unknown policy %q", flags.name)
 	}
-	if policy.IncludeDiscounted && len(policy.PriceCeilings) == 0 {
-		return config.Policy{}, errors.New("discounted policy requires at least one explicit price ceiling")
-	}
-	if !policy.IncludeDiscounted && len(policy.PriceCeilings) != 0 {
-		return config.Policy{}, errors.New("price ceilings require a discounted policy")
-	}
-	return policy, nil
 }
 
 func toolUseSucceeded(stream []byte, marker string) (bool, error) {
@@ -472,17 +421,6 @@ func compact(message string) string {
 		message = message[:500]
 	}
 	return message
-}
-
-func cloneMap(input map[string]string) map[string]string {
-	if len(input) == 0 {
-		return nil
-	}
-	result := make(map[string]string, len(input))
-	for key, value := range input {
-		result[key] = value
-	}
-	return result
 }
 
 func fatal(err error) {

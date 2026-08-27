@@ -25,7 +25,6 @@ min_context = 131072
 
 [jobs.openrouter-kimi-code.policy]
 include_free = false
-include_discounted = false
 
 [jobs.zenmux-kimi-code]
 enabled = true
@@ -36,4 +35,3 @@ min_context = 131072
 
 [jobs.zenmux-kimi-code.policy]
 include_free = false
-include_discounted = false

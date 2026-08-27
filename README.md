@@ -48,7 +48,7 @@ export ZENMUX_API_KEY=...
 llmloot setup
 ```
 
-Interactive setup asks one question at a time, shows the target plan, performs an immediate sync, and enables one daily native per-user schedule by default. Use `llmloot setup --no-schedule` to opt out. `setup --yes` accepts the existing configuration or stealth-only defaults, but it never supplies a missing credential or enables ordinary free or discounted models.
+Interactive setup asks one question at a time, shows the target plan, performs an immediate sync, and enables one daily native per-user schedule by default. Use `llmloot setup --no-schedule` to opt out. `setup --yes` accepts the existing configuration or stealth-only defaults, but it never supplies a missing credential or enables ordinary free models.
 
 llmloot adopts a compatible Kimi Code provider or copies the bootstrap credential into Kimi Code's normal `config.toml`. Later discovery reuses that provider credential. llmloot's own configuration, state, output, and diagnostics do not store or print provider keys.
 
@@ -56,24 +56,14 @@ Scheduling uses a systemd user timer on Linux, a LaunchAgent on macOS, or a per-
 
 ## Policy
 
-Every enabled job considers free stealth models. Ordinary free and discounted paid models are independent opt-ins:
+Every enabled job considers free stealth models. Ordinary free models are an explicit opt-in:
 
 ```toml
 [jobs.openrouter-kimi-code.policy]
 include_free = false
-include_discounted = false
 ```
 
-Enabling `include_free` adds ordinary free models. Enabling `include_discounted` adds discounted models and requires an explicit decimal-string ceiling for every nonzero billing dimension:
-
-```toml
-[jobs.openrouter-kimi-code.policy]
-include_free = false
-include_discounted = true
-price_ceilings = { "prompt|per_token|USD" = "0.000001", "completion|per_token|USD" = "0.000003" }
-```
-
-Ceiling keys use `dimension|unit|currency`, matching the normalized prices in `llmloot sync --dry-run --json`. A model is discounted only when the source exposes authoritative machine-readable discount evidence; llmloot does not infer discounts from website badges or comparisons.
+Enabling `include_free` adds ordinary free models alongside stealth models. Paid models are never selected: neither supported source exposes authoritative machine-readable discount evidence in its public catalog, so llmloot only tracks stealth and free eligibility.
 
 See [config.example.toml](config.example.toml) for the complete two-source configuration.
 
@@ -110,8 +100,6 @@ The default is stealth-only for both cells. If a cell has no stealth candidate, 
 ```sh
 go run ./tools/livecheck --llmloot /tmp/llmloot-livecheck --source all --openrouter-policy free --zenmux-policy free
 ```
-
-Discounted checks additionally require one or more source-specific ceiling flags such as `--openrouter-ceiling 'prompt|per_token|USD=0.000001'`.
 
 To retry a different candidate without changing policy, use one source and name an exact model that the sync selected, such as `--source zenmux --zenmux-policy free --model '<exact-selected-model-id>'`. The check rejects models outside that run's eligible selection.
 

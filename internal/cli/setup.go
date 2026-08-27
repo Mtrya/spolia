@@ -282,17 +282,6 @@ func interviewConfiguration(configuration config.Config, noSchedule bool, writer
 				if err != nil {
 					return config.Config{}, err
 				}
-				job.Policy.IncludeDiscounted, err = askYesNo(reader, writer, "Include discounted paid models for "+sourceName+"?", job.Policy.IncludeDiscounted)
-				if err != nil {
-					return config.Config{}, err
-				}
-				if job.Policy.IncludeDiscounted {
-					ceilings, err := askCeilings(reader, writer, job.Policy.PriceCeilings)
-					if err != nil {
-						return config.Config{}, err
-					}
-					job.Policy.PriceCeilings = ceilings
-				}
 				job.Limit, err = askInteger(reader, writer, "Maximum selected models for "+sourceName, job.Limit)
 				if err != nil {
 					return config.Config{}, err
@@ -421,52 +410,6 @@ func askInt64(reader *bufio.Reader, writer io.Writer, question string, defaultVa
 		}
 		if errors.Is(err, io.EOF) {
 			return 0, io.ErrUnexpectedEOF
-		}
-	}
-}
-
-func askCeilings(reader *bufio.Reader, writer io.Writer, defaults map[string]string) (map[string]string, error) {
-	defaultText := ""
-	if len(defaults) > 0 {
-		keys := make([]string, 0, len(defaults))
-		for key := range defaults {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		parts := make([]string, 0, len(keys))
-		for _, key := range keys {
-			parts = append(parts, key+"="+defaults[key])
-		}
-		defaultText = strings.Join(parts, ",")
-	}
-	for {
-		fmt.Fprintf(writer, "Price ceilings as dimension|unit|currency=value, comma separated [%s] ", defaultText)
-		answer, err := reader.ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, err
-		}
-		answer = strings.TrimSpace(answer)
-		if answer == "" {
-			if len(defaults) > 0 {
-				return defaults, nil
-			}
-		} else {
-			result := make(map[string]string)
-			valid := true
-			for _, item := range strings.Split(answer, ",") {
-				key, value, found := strings.Cut(strings.TrimSpace(item), "=")
-				if !found || key == "" || value == "" {
-					valid = false
-					break
-				}
-				result[key] = value
-			}
-			if valid {
-				return result, nil
-			}
-		}
-		if errors.Is(err, io.EOF) {
-			return nil, io.ErrUnexpectedEOF
 		}
 	}
 }

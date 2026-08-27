@@ -62,7 +62,6 @@ func classify(candidate model.Candidate, options Options) Decision {
 
 	prices := inspectPrices(candidate)
 	hasStealthEvidence := hasEvidence(candidate, model.ClassStealth)
-	hasDiscountEvidence := hasEvidence(candidate, model.ClassDiscounted)
 
 	if prices.valid && prices.free && hasStealthEvidence {
 		decision.Eligible = true
@@ -73,16 +72,6 @@ func classify(candidate model.Candidate, options Options) Decision {
 		decision.Eligible = true
 		decision.Class = model.ClassFree
 		return decision
-	}
-	if prices.valid && !prices.free && prices.nonzero && hasDiscountEvidence && options.Policy.IncludeDiscounted {
-		if reasons := ceilingReasons(candidate.Prices, options.Policy.PriceCeilings); len(reasons) == 0 {
-			decision.Eligible = true
-			decision.Class = model.ClassDiscounted
-			return decision
-		} else {
-			decision.Reasons = reasons
-			return decision
-		}
 	}
 
 	if !prices.valid {
@@ -97,14 +86,11 @@ func classify(candidate model.Candidate, options Options) Decision {
 		}
 		return decision
 	}
-	if hasStealthEvidence && !hasDiscountEvidence {
-		decision.Reasons = append(decision.Reasons, Reason{Code: "stealth_requires_free", Field: "pricing"})
+	if hasStealthEvidence {
+		decision.Reasons = []Reason{{Code: "stealth_requires_free", Field: "pricing"}}
+		return decision
 	}
-	if hasDiscountEvidence {
-		decision.Reasons = append(decision.Reasons, Reason{Code: "class_disabled", Field: "discounted"})
-	} else {
-		decision.Reasons = append(decision.Reasons, Reason{Code: "no_discount_evidence", Field: "evidence"})
-	}
+	decision.Reasons = []Reason{{Code: "paid_model", Field: "pricing"}}
 	return decision
 }
 
@@ -136,7 +122,6 @@ func compatibilityReasons(candidate model.Candidate, options Options) []Reason {
 type priceInspection struct {
 	valid   bool
 	free    bool
-	nonzero bool
 	reasons []Reason
 }
 
@@ -169,7 +154,6 @@ func inspectPrices(candidate model.Candidate) priceInspection {
 		}
 		if decimal.Sign() != 0 {
 			result.free = false
-			result.nonzero = true
 		}
 	}
 	for dimension, present := range required {
@@ -181,34 +165,6 @@ func inspectPrices(candidate model.Candidate) priceInspection {
 	}
 	result.reasons = uniqueReasons(result.reasons)
 	return result
-}
-
-func ceilingReasons(prices []model.Price, ceilings map[string]string) []Reason {
-	var reasons []Reason
-	for _, price := range prices {
-		value, err := model.ParseDecimal(price.Value)
-		if err != nil || value.Sign() < 0 {
-			reasons = append(reasons, Reason{Code: "malformed_price", Field: price.Dimension})
-			continue
-		}
-		if value.Sign() == 0 {
-			continue
-		}
-		ceilingText, exists := ceilings[price.Key()]
-		if !exists {
-			reasons = append(reasons, Reason{Code: "missing_price_ceiling", Field: price.Key()})
-			continue
-		}
-		ceiling, err := model.ParseDecimal(ceilingText)
-		if err != nil || ceiling.Sign() < 0 {
-			reasons = append(reasons, Reason{Code: "invalid_price_ceiling", Field: price.Key()})
-			continue
-		}
-		if value.Cmp(ceiling) > 0 {
-			reasons = append(reasons, Reason{Code: "price_above_ceiling", Field: price.Key()})
-		}
-	}
-	return uniqueReasons(reasons)
 }
 
 func hasEvidence(candidate model.Candidate, class model.EligibilityClass) bool {
@@ -226,10 +182,8 @@ func classRank(class model.EligibilityClass) int {
 		return 0
 	case model.ClassFree:
 		return 1
-	case model.ClassDiscounted:
-		return 2
 	default:
-		return 3
+		return 2
 	}
 }
 

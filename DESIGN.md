@@ -20,7 +20,7 @@ source adapter → normalized facts and evidence → shared policy → desired m
                                             platform scheduler
 ```
 
-A source adapter fetches and normalizes provider-specific data. It does not decide consent or render harness configuration. The shared policy evaluates stealth, free, discounted, price ceilings, compatibility, ranking, and limits identically across sources. The Kimi Code adapter maps desired models into the harness configuration while preserving user-owned content. Platform adapters own one native per-user schedule.
+A source adapter fetches and normalizes provider-specific data. It does not decide consent or render harness configuration. The shared policy evaluates stealth, free, compatibility, ranking, and limits identically across sources. The Kimi Code adapter maps desired models into the harness configuration while preserving user-owned content. Platform adapters own one native per-user schedule.
 
 Interfaces remain internal and consumer-owned. Source packages do not import Kimi Code or scheduling packages, the target adapter contains no provider-specific eligibility logic, and build-tagged scheduling implementations share one small lifecycle interface.
 
@@ -28,13 +28,13 @@ Interfaces remain internal and consumer-owned. Source packages do not import Kim
 
 A job binds one source, one harness target, and one policy. Selection limits are per job and default to three. Source priority is explicit and resolves duplicate upstream aliases without renaming them.
 
-Every job always considers the stealth class. Ordinary free and discounted classes are independent, additive, and disabled by default. A run never changes those configured choices. Zero candidates is a successful outcome, while authentication, network, HTTP, parsing, incompatible schema, target validation, and write failures are errors.
+Every job always considers the stealth class. The ordinary free class is additive and disabled by default. A run never changes those configured choices. Zero candidates is a successful outcome, while authentication, network, HTTP, parsing, incompatible schema, target validation, and write failures are errors.
 
 A stealth candidate must also meet the free-price contract and have explicit or strongly corroborated official stealth, cloaked, anonymous, or temporary anonymous-preview evidence. A generic preview name or zero price is insufficient.
 
 A free candidate has present, well-formed, zero prompt and completion prices across all tiers, plus zero for every other published billing dimension. Missing optional dimensions are not treated as malformed.
 
-A discounted candidate requires authoritative machine-readable source evidence. Every nonzero billing dimension must have a compatible configured ceiling. llmloot does not scrape badges, compare vendors, or maintain a reference price list.
+Paid models are never eligible. Neither supported source exposes authoritative machine-readable discount evidence in its public catalog, so there is no discounted class; llmloot does not scrape badges, compare vendors, or maintain a reference price list.
 
 Only concrete OpenAI-compatible chat models with text output and a positive context window are eligible. Routers, automatic selectors, fallback aliases, and utilities are excluded. Tool use is accepted unless authoritative metadata explicitly disables it. Capabilities are emitted only from explicit normalized metadata.
 
@@ -83,6 +83,6 @@ Provider credentials are never placed in public CI. Before publication, an opera
 When an upstream contract changes, verify it against the current primary documentation and a real supported binary before changing behavior.
 
 - Kimi Code: [configuration reference](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/configuration/config-files.md), [data locations](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/configuration/data-locations.md), and [releases](https://github.com/MoonshotAI/kimi-code/releases). The supported harness is `MoonshotAI/kimi-code`; legacy `kimi-cli` is unsupported.
-- OpenRouter: [Models API](https://openrouter.ai/docs/api/api-reference/models/get-models), [model schema](https://openrouter.ai/docs/guides/overview/models), the [stealth provider](https://openrouter.ai/provider/stealth) and [OpenRouter model family](https://openrouter.ai/openrouter) pages, and [provider discount metadata](https://openrouter.ai/docs/guides/community/for-providers).
+- OpenRouter: [Models API](https://openrouter.ai/docs/api/api-reference/models/get-models), [model schema](https://openrouter.ai/docs/guides/overview/models), and the [stealth provider](https://openrouter.ai/provider/stealth) and [OpenRouter model family](https://openrouter.ai/openrouter) pages.
 - ZenMux: [Models API](https://zenmux.ai/docs/api/openai/openai-list-models.html), [pricing and fees](https://zenmux.ai/docs/about/pricing-and-cost), and [tool calling](https://zenmux.ai/docs/guide/advanced/tool-calls.html). Website badges and filters never feed selection.
 - Scheduling: [systemd timers](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html), [Apple scheduled jobs](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html), and [Windows Task Scheduler triggers](https://learn.microsoft.com/en-us/windows/win32/taskschd/trigger-types) with [`StartWhenAvailable`](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-startwhenavailable-settingstype-element).

@@ -15,10 +15,9 @@ func TestDefaultPolicySelectsOnlyFreeStealthModels(t *testing.T) {
 	stealth := freeCandidate("stealth/model")
 	stealth.Evidence = []model.Evidence{{Class: model.ClassStealth, Kind: "official_namespace", Field: "id"}}
 	ordinaryFree := freeCandidate("ordinary/free")
-	discounted := paidCandidate("discounted/model")
-	discounted.Evidence = []model.Evidence{{Class: model.ClassDiscounted, Kind: "source_discount", Field: "discount"}}
+	paid := paidCandidate("paid/model")
 
-	decisions := Evaluate([]model.Candidate{ordinaryFree, discounted, stealth}, Options{MinContext: 131072, Now: policyNow})
+	decisions := Evaluate([]model.Candidate{ordinaryFree, paid, stealth}, Options{MinContext: 131072, Now: policyNow})
 	selected := eligible(decisions)
 	if len(selected) != 1 || selected[0].Candidate.ID != stealth.ID || selected[0].Class != model.ClassStealth {
 		t.Fatalf("selected = %#v", selected)
@@ -26,70 +25,25 @@ func TestDefaultPolicySelectsOnlyFreeStealthModels(t *testing.T) {
 	if !hasReason(decisionFor(decisions, ordinaryFree.ID), "class_disabled") {
 		t.Fatal("ordinary free model was not explained as disabled")
 	}
-	if !hasReason(decisionFor(decisions, discounted.ID), "class_disabled") {
-		t.Fatal("discounted model was not explained as disabled")
+	if !hasReason(decisionFor(decisions, paid.ID), "paid_model") {
+		t.Fatal("paid model was not explained as paid")
 	}
 }
 
-func TestFreeAndDiscountedAreIndependentAdditiveOptIns(t *testing.T) {
+func TestFreeIsAnAdditiveOptIn(t *testing.T) {
 	t.Parallel()
 	stealth := freeCandidate("stealth/model")
 	stealth.Evidence = []model.Evidence{{Class: model.ClassStealth, Kind: "official_description", Field: "description"}}
 	ordinaryFree := freeCandidate("ordinary/free")
-	discounted := paidCandidate("discounted/model")
-	discounted.Evidence = []model.Evidence{{Class: model.ClassDiscounted, Kind: "source_discount", Field: "discount"}}
+	paid := paidCandidate("paid/model")
 
-	freeOnly := Evaluate([]model.Candidate{discounted, ordinaryFree, stealth}, Options{Policy: config.Policy{IncludeFree: true}, MinContext: 131072, Now: policyNow})
-	selected := eligible(freeOnly)
+	decisions := Evaluate([]model.Candidate{paid, ordinaryFree, stealth}, Options{Policy: config.Policy{IncludeFree: true}, MinContext: 131072, Now: policyNow})
+	selected := eligible(decisions)
 	if len(selected) != 2 || selected[0].Class != model.ClassStealth || selected[1].Class != model.ClassFree {
-		t.Fatalf("free-only selection = %#v", selected)
+		t.Fatalf("free opt-in selection = %#v", selected)
 	}
-
-	discountOnly := Evaluate([]model.Candidate{ordinaryFree, discounted, stealth}, Options{
-		Policy: config.Policy{
-			IncludeDiscounted: true,
-			PriceCeilings: map[string]string{
-				"prompt|per_token|USD":     "1",
-				"completion|per_token|USD": "2",
-				"request|per_request|USD":  "0.5",
-			},
-		},
-		MinContext: 131072,
-		Now:        policyNow,
-	})
-	selected = eligible(discountOnly)
-	if len(selected) != 2 || selected[0].Class != model.ClassStealth || selected[1].Class != model.ClassDiscounted {
-		t.Fatalf("discount-only selection = %#v", selected)
-	}
-}
-
-func TestEveryNonzeroDiscountedPriceNeedsACeiling(t *testing.T) {
-	t.Parallel()
-	candidate := paidCandidate("discounted/model")
-	candidate.Evidence = []model.Evidence{{Class: model.ClassDiscounted, Kind: "source_discount", Field: "discount"}}
-	decisions := Evaluate([]model.Candidate{candidate}, Options{
-		Policy: config.Policy{
-			IncludeDiscounted: true,
-			PriceCeilings: map[string]string{
-				"prompt|per_token|USD":     "1",
-				"completion|per_token|USD": "2",
-			},
-		},
-		MinContext: 131072,
-		Now:        policyNow,
-	})
-	if decisions[0].Eligible || !hasReason(decisions[0], "missing_price_ceiling") {
-		t.Fatalf("decision = %#v", decisions[0])
-	}
-
-	ceilings := map[string]string{
-		"prompt|per_token|USD":     "0.9999999999999999999",
-		"completion|per_token|USD": "2",
-		"request|per_request|USD":  "0.5",
-	}
-	decisions = Evaluate([]model.Candidate{candidate}, Options{Policy: config.Policy{IncludeDiscounted: true, PriceCeilings: ceilings}, MinContext: 131072, Now: policyNow})
-	if decisions[0].Eligible || !hasReason(decisions[0], "price_above_ceiling") {
-		t.Fatalf("exact decimal ceiling decision = %#v", decisions[0])
+	if !hasReason(decisionFor(decisions, paid.ID), "paid_model") {
+		t.Fatal("paid model was not explained as paid")
 	}
 }
 
