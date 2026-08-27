@@ -14,15 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/app"
-	"github.com/Mtrya/llmloot/internal/config"
+	"github.com/Mtrya/spolia/internal/app"
+	"github.com/Mtrya/spolia/internal/config"
 )
 
-const artifactCredential = "llmloot-artifact-check-key"
+const artifactCredential = "spolia-artifact-check-key"
 
 func main() {
-	binary := flag.String("binary", "", "llmloot release binary")
-	binDir := flag.String("bin-dir", "", "directory containing the llmloot release binary")
+	binary := flag.String("binary", "", "spolia release binary")
+	binDir := flag.String("bin-dir", "", "directory containing the spolia release binary")
 	kimi := flag.String("kimi", "kimi", "Kimi Code binary")
 	sourceName := flag.String("source", "all", "fixture source: openrouter, zenmux, or all")
 	flag.Parse()
@@ -31,7 +31,7 @@ func main() {
 		os.Exit(2)
 	}
 	if *binary == "" {
-		name := "llmloot"
+		name := "spolia"
 		if runtime.GOOS == "windows" {
 			name += ".exe"
 		}
@@ -91,12 +91,12 @@ func checkSource(binary, kimi, sourceName string) error {
 		_, _ = writer.Write(fixture)
 	}))
 	defer server.Close()
-	root, err := os.MkdirTemp("", "llmloot-artifact-check-")
+	root, err := os.MkdirTemp("", "spolia-artifact-check-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(root)
-	llmlootHome := filepath.Join(root, "llmloot")
+	spoliaHome := filepath.Join(root, "spolia")
 	kimiHome := filepath.Join(root, "kimi")
 	configuration := config.Default()
 	configuration.Schedule.Enabled = false
@@ -107,10 +107,10 @@ func checkSource(binary, kimi, sourceName string) error {
 		}
 		configuration.Jobs[name] = job
 	}
-	if err := config.Save(filepath.Join(llmlootHome, "config.toml"), configuration); err != nil {
+	if err := config.Save(filepath.Join(spoliaHome, "config.toml"), configuration); err != nil {
 		return err
 	}
-	environment := artifactEnvironment(sourceName, server.URL, llmlootHome, kimiHome, kimi)
+	environment := artifactEnvironment(sourceName, server.URL, spoliaHome, kimiHome, kimi)
 	setup, err := runJSON(binary, environment, "setup", "--yes", "--no-schedule", "--json")
 	if err != nil {
 		return fmt.Errorf("%s setup failed: %w", sourceName, err)
@@ -168,10 +168,10 @@ func run(binary string, environment []string, arguments ...string) ([]byte, erro
 	return contents, nil
 }
 
-func artifactEnvironment(sourceName, endpoint, llmlootHome, kimiHome, kimi string) []string {
+func artifactEnvironment(sourceName, endpoint, spoliaHome, kimiHome, kimi string) []string {
 	blocked := map[string]bool{
-		"OPENROUTER_API_KEY": true, "ZENMUX_API_KEY": true, "LLMLOOT_HOME": true, "KIMI_CODE_HOME": true,
-		"LLMLOOT_TEST_OPENROUTER_MODELS_ENDPOINT": true, "LLMLOOT_TEST_ZENMUX_MODELS_ENDPOINT": true,
+		"OPENROUTER_API_KEY": true, "ZENMUX_API_KEY": true, "SPOLIA_HOME": true, "KIMI_CODE_HOME": true,
+		"SPOLIA_TEST_OPENROUTER_MODELS_ENDPOINT": true, "SPOLIA_TEST_ZENMUX_MODELS_ENDPOINT": true,
 		"KIMI_DISABLE_TELEMETRY": true, "PATH": true,
 	}
 	environment := make([]string, 0, len(os.Environ())+6)
@@ -186,15 +186,15 @@ func artifactEnvironment(sourceName, endpoint, llmlootHome, kimiHome, kimi strin
 		}
 	}
 	environment = append(environment,
-		"LLMLOOT_HOME="+llmlootHome,
+		"SPOLIA_HOME="+spoliaHome,
 		"KIMI_CODE_HOME="+kimiHome,
 		"KIMI_DISABLE_TELEMETRY=1",
 		"PATH="+filepath.Dir(kimi)+string(os.PathListSeparator)+pathValue,
 	)
 	if sourceName == "openrouter" {
-		environment = append(environment, "OPENROUTER_API_KEY="+artifactCredential, "LLMLOOT_TEST_OPENROUTER_MODELS_ENDPOINT="+endpoint)
+		environment = append(environment, "OPENROUTER_API_KEY="+artifactCredential, "SPOLIA_TEST_OPENROUTER_MODELS_ENDPOINT="+endpoint)
 	} else {
-		environment = append(environment, "ZENMUX_API_KEY="+artifactCredential, "LLMLOOT_TEST_ZENMUX_MODELS_ENDPOINT="+endpoint)
+		environment = append(environment, "ZENMUX_API_KEY="+artifactCredential, "SPOLIA_TEST_ZENMUX_MODELS_ENDPOINT="+endpoint)
 	}
 	return environment
 }

@@ -7,22 +7,22 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/schedule"
-	"github.com/Mtrya/llmloot/internal/state"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/schedule"
+	"github.com/Mtrya/spolia/internal/state"
 )
 
 func currentScheduleDefinition(localTime string) (schedule.Definition, error) {
-	if os.Getenv("LLMLOOT_HOME") != "" {
-		return schedule.Definition{}, fmt.Errorf("native scheduling requires the standard per-user llmloot home; unset LLMLOOT_HOME or use --no-schedule")
+	if os.Getenv("SPOLIA_HOME") != "" {
+		return schedule.Definition{}, fmt.Errorf("native scheduling requires the standard per-user spolia home; unset SPOLIA_HOME or use --no-schedule")
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		return schedule.Definition{}, fmt.Errorf("resolve llmloot executable: %w", err)
+		return schedule.Definition{}, fmt.Errorf("resolve spolia executable: %w", err)
 	}
 	executable, err = filepath.Abs(executable)
 	if err != nil {
-		return schedule.Definition{}, fmt.Errorf("resolve absolute llmloot executable: %w", err)
+		return schedule.Definition{}, fmt.Errorf("resolve absolute spolia executable: %w", err)
 	}
 	definition := schedule.Definition{Executable: executable, LocalTime: localTime}
 	if err := schedule.ValidateDefinition(definition); err != nil {
@@ -75,7 +75,7 @@ func reconcileConfiguredScheduler(ctx context.Context, statePath string, configu
 			return schedule.Inspection{}, err
 		}
 		if inspection.Installed && (!inspection.Managed || !inspection.Matches) {
-			return inspection, fmt.Errorf("scheduler artifact %q changed since llmloot last wrote it", inspection.Identifier)
+			return inspection, fmt.Errorf("scheduler artifact %q changed since spolia last wrote it", inspection.Identifier)
 		}
 		if !configuration.Schedule.Enabled {
 			if _, err := manager.Remove(ctx); err != nil {

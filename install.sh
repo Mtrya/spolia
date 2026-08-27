@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repository="Mtrya/llmloot"
-latest_url="${LLMLOOT_LATEST_URL:-https://github.com/${repository}/releases/latest}"
-install_dir="${LLMLOOT_BIN_DIR:-${HOME}/.local/bin}"
+repository="Mtrya/spolia"
+latest_url="${SPOLIA_LATEST_URL:-https://github.com/${repository}/releases/latest}"
+install_dir="${SPOLIA_BIN_DIR:-${HOME}/.local/bin}"
 
 case "$(uname -s)" in
   Linux) os="linux" ;;
   Darwin) os="darwin" ;;
-  *) printf 'llmloot does not provide an archive for this operating system.\n' >&2; exit 1 ;;
+  *) printf 'spolia does not provide an archive for this operating system.\n' >&2; exit 1 ;;
 esac
 
 case "$(uname -m)" in
   x86_64|amd64) arch="amd64" ;;
   arm64|aarch64) arch="arm64" ;;
-  *) printf 'llmloot does not provide an archive for this architecture.\n' >&2; exit 1 ;;
+  *) printf 'spolia does not provide an archive for this architecture.\n' >&2; exit 1 ;;
 esac
 
-if [[ -n "${LLMLOOT_INSTALL_VERSION:-}" ]]; then
-  version="${LLMLOOT_INSTALL_VERSION#v}"
+if [[ -n "${SPOLIA_INSTALL_VERSION:-}" ]]; then
+  version="${SPOLIA_INSTALL_VERSION#v}"
   tag="v${version}"
 else
   resolved_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' "${latest_url}")"
   tag="${resolved_url##*/}"
   if [[ ! "${tag}" =~ ^v[0-9A-Za-z.+-]+$ ]]; then
-    printf 'Could not determine the latest llmloot release from %s.\n' "${resolved_url}" >&2
+    printf 'Could not determine the latest spolia release from %s.\n' "${resolved_url}" >&2
     exit 1
   fi
   version="${tag#v}"
 fi
 
-download_root="${LLMLOOT_RELEASE_DOWNLOAD_URL:-https://github.com/${repository}/releases/download/${tag}}"
-asset="llmloot_${version}_${os}_${arch}.tar.gz"
+download_root="${SPOLIA_RELEASE_DOWNLOAD_URL:-https://github.com/${repository}/releases/download/${tag}}"
+asset="spolia_${version}_${os}_${arch}.tar.gz"
 archive_root="${asset%.tar.gz}"
 temporary="$(mktemp -d)"
 trap 'rm -rf "${temporary}"' EXIT
@@ -60,10 +60,10 @@ fi
 
 tar -xzf "${temporary}/${asset}" -C "${temporary}"
 mkdir -p "${install_dir}"
-install -m 0755 "${temporary}/${archive_root}/llmloot" "${install_dir}/llmloot"
+install -m 0755 "${temporary}/${archive_root}/spolia" "${install_dir}/spolia"
 
-printf 'Installed llmloot %s to %s/llmloot.\n' "${version}" "${install_dir}"
+printf 'Installed spolia %s to %s/spolia.\n' "${version}" "${install_dir}"
 case ":${PATH}:" in
   *":${install_dir}:"*) ;;
-  *) printf 'Add %s to PATH, then run: llmloot setup\n' "${install_dir}" ;;
+  *) printf 'Add %s to PATH, then run: spolia setup\n' "${install_dir}" ;;
 esac

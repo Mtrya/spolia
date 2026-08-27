@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/app"
-	"github.com/Mtrya/llmloot/internal/atomicfile"
-	"github.com/Mtrya/llmloot/internal/config"
+	"github.com/Mtrya/spolia/internal/app"
+	"github.com/Mtrya/spolia/internal/atomicfile"
+	"github.com/Mtrya/spolia/internal/config"
 )
 
 const reportSchemaVersion = 1
@@ -35,7 +35,7 @@ type cellReport struct {
 	Policy           string `json:"policy"`
 	SelectedModel    string `json:"selected_model,omitempty"`
 	EligibilityClass string `json:"eligibility_class,omitempty"`
-	LLMlootVersion   string `json:"llmloot_version"`
+	SpoliaVersion    string `json:"spolia_version"`
 	KimiCodeVersion  string `json:"kimi_code_version"`
 	OS               string `json:"os"`
 	Architecture     string `json:"architecture"`
@@ -53,7 +53,7 @@ type policyFlags struct {
 func main() {
 	sourceName := flag.String("source", "all", "cell to run: openrouter, zenmux, or all")
 	selectedModel := flag.String("model", "", "exact eligible model to validate; requires a single source")
-	llmlootFlag := flag.String("llmloot", "llmloot", "llmloot binary to validate")
+	spoliaFlag := flag.String("spolia", "spolia", "spolia binary to validate")
 	kimiFlag := flag.String("kimi", "kimi", "Kimi Code binary to use")
 	openRouterPolicy := flag.String("openrouter-policy", "stealth", "openrouter policy: stealth or free")
 	zenMuxPolicy := flag.String("zenmux-policy", "stealth", "zenmux policy: stealth or free")
@@ -84,7 +84,7 @@ func main() {
 			fatal(fmt.Errorf("%s credential is unavailable", source))
 		}
 	}
-	llmloot, err := executablePath(*llmlootFlag)
+	spolia, err := executablePath(*spoliaFlag)
 	if err != nil {
 		fatal(err)
 	}
@@ -92,7 +92,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	llmlootVersion, err := commandVersion(llmloot)
+	spoliaVersion, err := commandVersion(spolia)
 	if err != nil {
 		fatal(err)
 	}
@@ -103,7 +103,7 @@ func main() {
 
 	result := report{SchemaVersion: reportSchemaVersion, GeneratedAt: time.Now().UTC(), Outcome: "pass", Cells: make([]cellReport, 0, len(sources))}
 	for _, source := range sources {
-		cell := runCell(source, policies[source], *selectedModel, llmloot, kimi, llmlootVersion, kimiVersion)
+		cell := runCell(source, policies[source], *selectedModel, spolia, kimi, spoliaVersion, kimiVersion)
 		if !cell.ToolUseSuccess {
 			result.Outcome = "fail"
 		}
@@ -120,20 +120,20 @@ func main() {
 	}
 }
 
-func runCell(sourceName string, policy policyFlags, requestedModel, llmloot, kimi, llmlootVersion, kimiVersion string) cellReport {
+func runCell(sourceName string, policy policyFlags, requestedModel, spolia, kimi, spoliaVersion, kimiVersion string) cellReport {
 	cell := cellReport{
-		Source: sourceName, Policy: policy.name, LLMlootVersion: llmlootVersion,
+		Source: sourceName, Policy: policy.name, SpoliaVersion: spoliaVersion,
 		KimiCodeVersion: kimiVersion, OS: runtime.GOOS, Architecture: runtime.GOARCH,
 	}
 	credential := os.Getenv(credentialEnvironment(sourceName))
-	root, err := os.MkdirTemp("", "llmloot-livecheck-")
+	root, err := os.MkdirTemp("", "spolia-livecheck-")
 	if err != nil {
 		cell.Error = "create isolated live-check directory"
 		return cell
 	}
 	defer os.RemoveAll(root)
 	redact := newRedactor(credential, root)
-	llmlootHome := filepath.Join(root, "llmloot")
+	spoliaHome := filepath.Join(root, "spolia")
 	kimiHome := filepath.Join(root, "kimi")
 	workspace := filepath.Join(root, "workspace")
 	skills := filepath.Join(root, "skills")
@@ -157,15 +157,15 @@ func runCell(sourceName string, policy policyFlags, requestedModel, llmloot, kim
 		}
 		configuration.Jobs[name] = job
 	}
-	if err := config.Save(filepath.Join(llmlootHome, "config.toml"), configuration); err != nil {
+	if err := config.Save(filepath.Join(spoliaHome, "config.toml"), configuration); err != nil {
 		cell.Error = redact(err.Error())
 		return cell
 	}
-	baseEnvironment := isolatedEnvironment(llmlootHome, kimiHome, kimi)
+	baseEnvironment := isolatedEnvironment(spoliaHome, kimiHome, kimi)
 	setupEnvironment := append(append([]string(nil), baseEnvironment...), credentialEnvironment(sourceName)+"="+credential)
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
-	setupOutput, err := runCommand(ctx, workspace, setupEnvironment, llmloot, "setup", "--yes", "--no-schedule", "--json")
+	setupOutput, err := runCommand(ctx, workspace, setupEnvironment, spolia, "setup", "--yes", "--no-schedule", "--json")
 	if err != nil {
 		cell.Error = redact(err.Error())
 		return cell
@@ -184,7 +184,7 @@ func runCell(sourceName string, policy policyFlags, requestedModel, llmloot, kim
 		cell.Error = "setup did not complete successfully"
 		return cell
 	}
-	syncOutput, err := runCommand(ctx, workspace, baseEnvironment, llmloot, "sync", "--json")
+	syncOutput, err := runCommand(ctx, workspace, baseEnvironment, spolia, "sync", "--json")
 	if err != nil {
 		cell.Error = redact(err.Error())
 		return cell
@@ -215,7 +215,7 @@ func runCell(sourceName string, policy policyFlags, requestedModel, llmloot, kim
 		return cell
 	}
 	cell.ModelActivation = "isolated_default"
-	prompt := "Use the Shell tool exactly once to run: printf llmloot-livecheck-tool-ok. After the tool succeeds, reply with a brief confirmation."
+	prompt := "Use the Shell tool exactly once to run: printf spolia-livecheck-tool-ok. After the tool succeeds, reply with a brief confirmation."
 	stream, err := runCommand(ctx, workspace, baseEnvironment, kimi, "-m", selected.ID, "-p", prompt, "--output-format", "stream-json", "--skills-dir", skills)
 	if err != nil {
 		cell.Error = redact(err.Error())
@@ -225,7 +225,7 @@ func runCell(sourceName string, policy policyFlags, requestedModel, llmloot, kim
 		cell.Error = "credential appeared in Kimi Code output"
 		return cell
 	}
-	success, err := toolUseSucceeded(stream, "llmloot-livecheck-tool-ok")
+	success, err := toolUseSucceeded(stream, "spolia-livecheck-tool-ok")
 	if err != nil {
 		cell.Error = redact(err.Error())
 		return cell
@@ -340,10 +340,10 @@ func credentialEnvironment(sourceName string) string {
 	return "ZENMUX_API_KEY"
 }
 
-func isolatedEnvironment(llmlootHome, kimiHome, kimi string) []string {
+func isolatedEnvironment(spoliaHome, kimiHome, kimi string) []string {
 	blocked := map[string]bool{
-		"OPENROUTER_API_KEY": true, "ZENMUX_API_KEY": true, "LLMLOOT_HOME": true, "KIMI_CODE_HOME": true,
-		"LLMLOOT_TEST_OPENROUTER_MODELS_ENDPOINT": true, "LLMLOOT_TEST_ZENMUX_MODELS_ENDPOINT": true,
+		"OPENROUTER_API_KEY": true, "ZENMUX_API_KEY": true, "SPOLIA_HOME": true, "KIMI_CODE_HOME": true,
+		"SPOLIA_TEST_OPENROUTER_MODELS_ENDPOINT": true, "SPOLIA_TEST_ZENMUX_MODELS_ENDPOINT": true,
 		"KIMI_DISABLE_TELEMETRY": true, "PATH": true,
 	}
 	result := make([]string, 0, len(os.Environ())+4)
@@ -358,7 +358,7 @@ func isolatedEnvironment(llmlootHome, kimiHome, kimi string) []string {
 		}
 	}
 	return append(result,
-		"LLMLOOT_HOME="+llmlootHome,
+		"SPOLIA_HOME="+spoliaHome,
 		"KIMI_CODE_HOME="+kimiHome,
 		"KIMI_DISABLE_TELEMETRY=1",
 		"PATH="+filepath.Dir(kimi)+string(os.PathListSeparator)+pathValue,

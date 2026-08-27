@@ -65,7 +65,7 @@ func (builder Builder) Build(ctx context.Context) error {
 	if err := prepareOutput(builder.Output); err != nil {
 		return err
 	}
-	temporary, err := os.MkdirTemp("", "llmloot-release-")
+	temporary, err := os.MkdirTemp("", "spolia-release-")
 	if err != nil {
 		return fmt.Errorf("create release workspace: %w", err)
 	}
@@ -82,12 +82,12 @@ func (builder Builder) Build(ctx context.Context) error {
 
 	checksums := make(map[string]string, len(Targets))
 	for _, target := range Targets {
-		binaryName := "llmloot"
+		binaryName := "spolia"
 		if target.GOOS == "windows" {
 			binaryName += ".exe"
 		}
 		binaryPath := filepath.Join(temporary, target.GOOS+"-"+target.GOARCH+"-"+binaryName)
-		command := exec.CommandContext(ctx, builder.GoBinary, "build", "-trimpath", "-buildvcs=false", "-ldflags", "-s -w -X github.com/Mtrya/llmloot/internal/cli.Version="+version, "-o", binaryPath, "./cmd/llmloot")
+		command := exec.CommandContext(ctx, builder.GoBinary, "build", "-trimpath", "-buildvcs=false", "-ldflags", "-s -w -X github.com/Mtrya/spolia/internal/cli.Version="+version, "-o", binaryPath, "./cmd/spolia")
 		command.Dir = builder.Root
 		command.Env = buildEnvironment(os.Environ(), target)
 		if output, err := command.CombinedOutput(); err != nil {
@@ -133,7 +133,7 @@ func NormalizeVersion(version string) (string, error) {
 var releaseVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
 
 func AssetName(version string, target Target) string {
-	return fmt.Sprintf("llmloot_%s_%s_%s%s", version, target.GOOS, target.GOARCH, target.Extension)
+	return fmt.Sprintf("spolia_%s_%s_%s%s", version, target.GOOS, target.GOARCH, target.Extension)
 }
 
 func TargetFor(goos, goarch string) (Target, error) {

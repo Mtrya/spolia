@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/model"
+	"github.com/Mtrya/spolia/internal/model"
 )
 
 const maxCatalogSize = 64 << 20

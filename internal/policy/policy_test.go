@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/model"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/model"
 )
 
 var policyNow = time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)

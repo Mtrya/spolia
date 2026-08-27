@@ -11,17 +11,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/schedule"
-	"github.com/Mtrya/llmloot/internal/state"
-	"github.com/Mtrya/llmloot/internal/target/kimicode"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/schedule"
+	"github.com/Mtrya/spolia/internal/state"
+	"github.com/Mtrya/spolia/internal/target/kimicode"
 )
 
 func TestSyncStopsWhenOwnershipStateIsMissing(t *testing.T) {
-	llmlootHome := t.TempDir()
-	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	spoliaHome := t.TempDir()
+	t.Setenv("SPOLIA_HOME", spoliaHome)
 	configuration := config.Default()
-	if err := config.Save(filepath.Join(llmlootHome, "config.toml"), configuration); err != nil {
+	if err := config.Save(filepath.Join(spoliaHome, "config.toml"), configuration); err != nil {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
@@ -34,10 +34,10 @@ func TestSyncStopsWhenOwnershipStateIsMissing(t *testing.T) {
 }
 
 func TestSyncIfDueStopsBeforeDiscoveryWhenBoundaryIsSatisfied(t *testing.T) {
-	llmlootHome := t.TempDir()
-	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	spoliaHome := t.TempDir()
+	t.Setenv("SPOLIA_HOME", spoliaHome)
 	configuration := config.Default()
-	configPath := filepath.Join(llmlootHome, "config.toml")
+	configPath := filepath.Join(spoliaHome, "config.toml")
 	if err := config.Save(configPath, configuration); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestSyncIfDueStopsBeforeDiscoveryWhenBoundaryIsSatisfied(t *testing.T) {
 		t.Fatal(err)
 	}
 	currentState.SatisfyScheduleBoundary(boundary)
-	if err := state.Save(filepath.Join(llmlootHome, "state.json"), currentState); err != nil {
+	if err := state.Save(filepath.Join(spoliaHome, "state.json"), currentState); err != nil {
 		t.Fatal(err)
 	}
 	lock, err := state.AcquireLock(config.LockPath(configPath))
@@ -78,14 +78,14 @@ func TestSyncIfDueStopsBeforeDiscoveryWhenBoundaryIsSatisfied(t *testing.T) {
 }
 
 func TestSyncIfDueIsAQuietNoOpWhenSchedulingIsDisabled(t *testing.T) {
-	llmlootHome := t.TempDir()
-	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	spoliaHome := t.TempDir()
+	t.Setenv("SPOLIA_HOME", spoliaHome)
 	configuration := config.Default()
 	configuration.Schedule.Enabled = false
-	if err := config.Save(filepath.Join(llmlootHome, "config.toml"), configuration); err != nil {
+	if err := config.Save(filepath.Join(spoliaHome, "config.toml"), configuration); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.Save(filepath.Join(llmlootHome, "state.json"), state.New()); err != nil {
+	if err := state.Save(filepath.Join(spoliaHome, "state.json"), state.New()); err != nil {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
@@ -98,14 +98,14 @@ func TestSyncIfDueIsAQuietNoOpWhenSchedulingIsDisabled(t *testing.T) {
 }
 
 func TestDoctorIsReadOnlyForAHealthyLocalConfiguration(t *testing.T) {
-	llmlootHome := t.TempDir()
+	spoliaHome := t.TempDir()
 	kimiHome := t.TempDir()
 	installation := cliKimi(t, kimiHome)
-	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	t.Setenv("SPOLIA_HOME", spoliaHome)
 	t.Setenv("KIMI_CODE_HOME", kimiHome)
 	configuration := localOnlyConfiguration()
-	configPath := filepath.Join(llmlootHome, "config.toml")
-	statePath := filepath.Join(llmlootHome, "state.json")
+	configPath := filepath.Join(spoliaHome, "config.toml")
+	statePath := filepath.Join(spoliaHome, "state.json")
 	if err := config.Save(configPath, configuration); err != nil {
 		t.Fatal(err)
 	}
@@ -137,14 +137,14 @@ func TestDoctorIsReadOnlyForAHealthyLocalConfiguration(t *testing.T) {
 }
 
 func TestUninstallDryRunThenRemovalUsesOwnership(t *testing.T) {
-	llmlootHome := t.TempDir()
+	spoliaHome := t.TempDir()
 	kimiHome := t.TempDir()
 	installation := cliKimi(t, kimiHome)
-	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	t.Setenv("SPOLIA_HOME", spoliaHome)
 	t.Setenv("KIMI_CODE_HOME", kimiHome)
 	configuration := localOnlyConfiguration()
-	configPath := filepath.Join(llmlootHome, "config.toml")
-	statePath := filepath.Join(llmlootHome, "state.json")
+	configPath := filepath.Join(spoliaHome, "config.toml")
+	statePath := filepath.Join(spoliaHome, "state.json")
 	if err := config.Save(configPath, configuration); err != nil {
 		t.Fatal(err)
 	}
@@ -181,10 +181,10 @@ func TestUninstallDryRunThenRemovalUsesOwnership(t *testing.T) {
 		t.Fatalf("uninstall exit code = %d, stderr = %s", exitCode, stderr.String())
 	}
 	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
-		t.Fatalf("llmloot config remains: %v", err)
+		t.Fatalf("spolia config remains: %v", err)
 	}
 	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-		t.Fatalf("llmloot state remains: %v", err)
+		t.Fatalf("spolia state remains: %v", err)
 	}
 	targetAfter, _ := os.ReadFile(installation.ConfigPath)
 	if strings.Contains(string(targetAfter), "stealth/owned") || strings.Contains(string(targetAfter), "providers.openrouter") {
@@ -193,13 +193,13 @@ func TestUninstallDryRunThenRemovalUsesOwnership(t *testing.T) {
 }
 
 func TestDoctorReportsAnExistingLockWithoutTouchingIt(t *testing.T) {
-	llmlootHome := t.TempDir()
+	spoliaHome := t.TempDir()
 	kimiHome := t.TempDir()
 	installation := cliKimi(t, kimiHome)
-	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	t.Setenv("SPOLIA_HOME", spoliaHome)
 	t.Setenv("KIMI_CODE_HOME", kimiHome)
 	configuration := localOnlyConfiguration()
-	configPath := filepath.Join(llmlootHome, "config.toml")
+	configPath := filepath.Join(spoliaHome, "config.toml")
 	if err := config.Save(configPath, configuration); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestDoctorReportsAnExistingLockWithoutTouchingIt(t *testing.T) {
 	}
 	currentState := state.New()
 	currentState.Targets["kimi-code"] = state.TargetState{Path: installation.ConfigPath}
-	if err := state.Save(filepath.Join(llmlootHome, "state.json"), currentState); err != nil {
+	if err := state.Save(filepath.Join(spoliaHome, "state.json"), currentState); err != nil {
 		t.Fatal(err)
 	}
 	lockPath := config.LockPath(configPath)

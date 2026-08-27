@@ -6,7 +6,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/Mtrya/llmloot/internal/cli"
+	"github.com/Mtrya/spolia/internal/cli"
 )
 
 func main() {

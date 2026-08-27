@@ -10,7 +10,7 @@ func Write(path string, contents []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create parent directory: %w", err)
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".llmloot-*")
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".spolia-*")
 	if err != nil {
 		return fmt.Errorf("create temporary file: %w", err)
 	}

@@ -14,29 +14,29 @@ import (
 
 func TestWindowsTaskSeparatesCommandAndArguments(t *testing.T) {
 	t.Parallel()
-	manager, err := New("io.github.mtrya.llmloot.test")
+	manager, err := New("io.github.mtrya.spolia.test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	contents, err := manager.renderTask(context.Background(), Definition{Executable: `C:\Program Files\llmloot & test\llmloot.exe`, LocalTime: "09:05"})
+	contents, err := manager.renderTask(context.Background(), Definition{Executable: `C:\Program Files\spolia & test\spolia.exe`, LocalTime: "09:05"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(contents)
-	if !strings.Contains(text, `<Command>C:\Program Files\llmloot &amp; test\llmloot.exe</Command>`) || !strings.Contains(text, `<Arguments>sync --if-due --quiet</Arguments>`) || !strings.Contains(text, `<StartWhenAvailable>true</StartWhenAvailable>`) {
+	if !strings.Contains(text, `<Command>C:\Program Files\spolia &amp; test\spolia.exe</Command>`) || !strings.Contains(text, `<Arguments>sync --if-due --quiet</Arguments>`) || !strings.Contains(text, `<StartWhenAvailable>true</StartWhenAvailable>`) {
 		t.Fatalf("task XML = %s", text)
 	}
 }
 
 func TestNativeWindowsTaskLifecycle(t *testing.T) {
-	if os.Getenv("LLMLOOT_NATIVE_SCHEDULE_TEST") != "1" {
-		t.Skip("set LLMLOOT_NATIVE_SCHEDULE_TEST=1 to exercise the real user scheduler")
+	if os.Getenv("SPOLIA_NATIVE_SCHEDULE_TEST") != "1" {
+		t.Skip("set SPOLIA_NATIVE_SCHEDULE_TEST=1 to exercise the real user scheduler")
 	}
 	executable, err := exec.LookPath("where.exe")
 	if err != nil {
 		t.Fatal(err)
 	}
-	identifier := fmt.Sprintf("io.github.mtrya.llmloot.test.%d.%d", os.Getpid(), time.Now().UnixNano())
+	identifier := fmt.Sprintf("io.github.mtrya.spolia.test.%d.%d", os.Getpid(), time.Now().UnixNano())
 	manager, err := New(identifier)
 	if err != nil {
 		t.Fatal(err)

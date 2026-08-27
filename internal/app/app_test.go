@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/model"
-	"github.com/Mtrya/llmloot/internal/source"
-	"github.com/Mtrya/llmloot/internal/state"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/model"
+	"github.com/Mtrya/spolia/internal/source"
+	"github.com/Mtrya/spolia/internal/state"
 )
 
 func TestPlanResolvesCollisionsBySourcePriorityAndFillsTheLowerPriorityLimit(t *testing.T) {

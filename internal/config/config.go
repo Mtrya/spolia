@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/atomicfile"
+	"github.com/Mtrya/spolia/internal/atomicfile"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -75,14 +75,14 @@ func Decode(reader io.Reader) (Config, error) {
 }
 
 func Path() (string, error) {
-	if home := os.Getenv("LLMLOOT_HOME"); home != "" {
+	if home := os.Getenv("SPOLIA_HOME"); home != "" {
 		return filepath.Join(home, "config.toml"), nil
 	}
 	root, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve user config directory: %w", err)
 	}
-	return filepath.Join(root, "llmloot", "config.toml"), nil
+	return filepath.Join(root, "spolia", "config.toml"), nil
 }
 
 func StatePath(configPath string) string {
@@ -121,7 +121,7 @@ func Save(path string, configuration Config) error {
 }
 
 func LockPath(configPath string) string {
-	return filepath.Join(filepath.Dir(configPath), "llmloot.lock")
+	return filepath.Join(filepath.Dir(configPath), "spolia.lock")
 }
 
 func (configuration Config) Validate() error {

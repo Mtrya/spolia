@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/schedule"
-	"github.com/Mtrya/llmloot/internal/state"
-	"github.com/Mtrya/llmloot/internal/target/kimicode"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/schedule"
+	"github.com/Mtrya/spolia/internal/state"
+	"github.com/Mtrya/spolia/internal/target/kimicode"
 )
 
 type doctorResult struct {
@@ -49,36 +49,36 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 	result := doctorResult{SchemaVersion: 1, Operation: "doctor", Outcome: "healthy", Checks: []doctorCheck{}}
 	executable, executableErr := os.Executable()
 	if executableErr != nil {
-		result.addError("llmloot_executable", executableErr.Error(), "Run llmloot from a stable executable path.")
+		result.addError("spolia_executable", executableErr.Error(), "Run spolia from a stable executable path.")
 	} else {
-		result.addOK("llmloot_executable", executable)
+		result.addOK("spolia_executable", executable)
 	}
 	configPath, pathErr := config.Path()
 	if pathErr != nil {
-		result.addError("llmloot_config", pathErr.Error(), "Fix the user configuration directory environment.")
+		result.addError("spolia_config", pathErr.Error(), "Fix the user configuration directory environment.")
 		return writeDoctor(stdout, stderr, options.json, result)
 	}
 	configuration, configErr := config.Load(configPath)
 	if configErr != nil {
-		result.addError("llmloot_config", configErr.Error(), "Run llmloot setup after correcting or removing the invalid config.")
+		result.addError("spolia_config", configErr.Error(), "Run spolia setup after correcting or removing the invalid config.")
 	} else {
-		result.addOK("llmloot_config", "configuration is valid")
+		result.addOK("spolia_config", "configuration is valid")
 	}
 	currentState, stateExists, stateErr := state.Read(config.StatePath(configPath))
 	if stateErr != nil {
 		result.addError("ownership_state", stateErr.Error(), "Restore the state file or remove owned target entries manually before running setup again.")
 	} else if !stateExists {
-		result.addError("ownership_state", "ownership state is missing", "Run llmloot setup before sync or target cleanup.")
+		result.addError("ownership_state", "ownership state is missing", "Run spolia setup before sync or target cleanup.")
 	} else {
 		result.addOK("ownership_state", "ownership state is valid")
 	}
 	lockPath := config.LockPath(configPath)
 	if _, lockErr := os.Stat(lockPath); lockErr == nil {
-		result.Checks = append(result.Checks, doctorCheck{Name: "process_lock", Status: "warning", Detail: "a lock file exists at " + lockPath, Remediation: "If no llmloot process is running, remove the stale lock file."})
+		result.Checks = append(result.Checks, doctorCheck{Name: "process_lock", Status: "warning", Detail: "a lock file exists at " + lockPath, Remediation: "If no spolia process is running, remove the stale lock file."})
 	} else if errors.Is(lockErr, os.ErrNotExist) {
 		result.addOK("process_lock", "no process lock is held")
 	} else {
-		result.addError("process_lock", lockErr.Error(), "Check the llmloot home directory permissions.")
+		result.addError("process_lock", lockErr.Error(), "Check the spolia home directory permissions.")
 	}
 	installation, installationErr := kimicode.Discover(ctx)
 	if installationErr != nil {
@@ -88,11 +88,11 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 	result.addOK("kimi_code", fmt.Sprintf("version %s at %s", installation.Version, installation.Binary))
 	document, documentErr := kimicode.Load(installation.ConfigPath)
 	if documentErr != nil {
-		result.addError("kimi_config", documentErr.Error(), "Correct the Kimi Code config before running llmloot setup or sync.")
+		result.addError("kimi_config", documentErr.Error(), "Correct the Kimi Code config before running spolia setup or sync.")
 		return writeDoctor(stdout, stderr, options.json, result)
 	}
 	if !document.Exists() {
-		result.addError("kimi_config", "Kimi Code config does not exist", "Run llmloot setup to create provider and model entries.")
+		result.addError("kimi_config", "Kimi Code config does not exist", "Run spolia setup to create provider and model entries.")
 	} else if err := installation.Validate(ctx, installation.ConfigPath); err != nil {
 		result.addError("kimi_config", err.Error(), "Run kimi doctor config and correct the reported Kimi Code configuration error.")
 	} else {
@@ -103,7 +103,7 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 	}
 	jobs, err := configuration.EnabledJobs("")
 	if err != nil {
-		result.addError("enabled_jobs", err.Error(), "Correct the llmloot job configuration.")
+		result.addError("enabled_jobs", err.Error(), "Correct the spolia job configuration.")
 		return writeDoctor(stdout, stderr, options.json, result)
 	}
 	providers, err := providersForJobs(configuration, jobs)
@@ -120,11 +120,11 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 		inspection := document.Provider(providers[sourceName])
 		switch {
 		case !inspection.Exists:
-			result.addError("provider:"+sourceName, "provider is missing", "Run llmloot setup to create it.")
+			result.addError("provider:"+sourceName, "provider is missing", "Run spolia setup to create it.")
 		case !inspection.Compatible:
 			result.addError("provider:"+sourceName, inspection.Reason, "Rename the conflicting provider or correct it before setup.")
 		case !inspection.CredentialExists:
-			result.addError("provider:"+sourceName, "provider credential is missing", "Run llmloot setup with the source credential available.")
+			result.addError("provider:"+sourceName, "provider credential is missing", "Run spolia setup with the source credential available.")
 		default:
 			result.addOK("provider:"+sourceName, "provider is compatible and credentialed")
 		}
@@ -164,7 +164,7 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 				result.addOK("planned_target", "the current reconciliation plan is valid")
 			}
 			for _, protected := range plan.Protected {
-				result.Checks = append(result.Checks, doctorCheck{Name: "protected:model:" + protected.ID, Status: "warning", Detail: "referenced by " + strings.Join(protected.References, ", "), Remediation: "Change the Kimi Code reference before expecting llmloot to remove this alias."})
+				result.Checks = append(result.Checks, doctorCheck{Name: "protected:model:" + protected.ID, Status: "warning", Detail: "referenced by " + strings.Join(protected.References, ", "), Remediation: "Change the Kimi Code reference before expecting spolia to remove this alias."})
 			}
 		}
 	}
@@ -193,7 +193,7 @@ func checkScheduler(ctx context.Context, configuration config.Config, currentSta
 	}
 	if currentState.Scheduler == nil {
 		if configuration.Schedule.Enabled {
-			result.addError("scheduler", "scheduling is enabled but scheduler ownership state is missing", "Run llmloot setup to install the native per-user schedule.")
+			result.addError("scheduler", "scheduling is enabled but scheduler ownership state is missing", "Run spolia setup to install the native per-user schedule.")
 		} else {
 			result.addOK("scheduler", "scheduling is disabled")
 		}
@@ -201,35 +201,35 @@ func checkScheduler(ctx context.Context, configuration config.Config, currentSta
 	}
 	_, inspection, err := inspectStoredScheduler(ctx, *currentState.Scheduler)
 	if err != nil {
-		result.addError("scheduler", err.Error(), "Correct the scheduler state or rerun llmloot setup on this platform.")
+		result.addError("scheduler", err.Error(), "Correct the scheduler state or rerun spolia setup on this platform.")
 		return
 	}
 	if !configuration.Schedule.Enabled {
 		if inspection.Installed {
-			result.addError("scheduler", "scheduling is disabled but the owned native schedule remains installed", "Run llmloot setup --no-schedule or llmloot uninstall.")
+			result.addError("scheduler", "scheduling is disabled but the owned native schedule remains installed", "Run spolia setup --no-schedule or spolia uninstall.")
 		} else {
-			result.addError("scheduler", "scheduling is disabled but stale scheduler ownership state remains", "Run llmloot setup --no-schedule to clear it.")
+			result.addError("scheduler", "scheduling is disabled but stale scheduler ownership state remains", "Run spolia setup --no-schedule to clear it.")
 		}
 		return
 	}
 	desired, err := currentScheduleDefinition(configuration.Schedule.LocalTime)
 	if err != nil {
-		result.addError("scheduler", err.Error(), "Run llmloot setup from a stable executable path.")
+		result.addError("scheduler", err.Error(), "Run spolia setup from a stable executable path.")
 		return
 	}
 	switch {
 	case currentState.Scheduler.Identifier != schedule.DefaultIdentifier:
-		result.addError("scheduler", fmt.Sprintf("unexpected scheduler identifier %q", currentState.Scheduler.Identifier), "Run llmloot setup to restore the one supported scheduler identifier.")
+		result.addError("scheduler", fmt.Sprintf("unexpected scheduler identifier %q", currentState.Scheduler.Identifier), "Run spolia setup to restore the one supported scheduler identifier.")
 	case !inspection.Installed:
-		result.addError("scheduler", "the owned native schedule is not installed", "Run llmloot setup to install it.")
+		result.addError("scheduler", "the owned native schedule is not installed", "Run spolia setup to install it.")
 	case !inspection.Managed:
-		result.addError("scheduler", "the native scheduler artifact is not owned by llmloot", "Move the conflicting artifact, then rerun llmloot setup.")
+		result.addError("scheduler", "the native scheduler artifact is not owned by spolia", "Move the conflicting artifact, then rerun spolia setup.")
 	case !inspection.Matches:
-		result.addError("scheduler", inspection.Detail, "Restore the scheduler definition or rerun llmloot setup after reviewing the edit.")
+		result.addError("scheduler", inspection.Detail, "Restore the scheduler definition or rerun spolia setup after reviewing the edit.")
 	case !inspection.Enabled:
-		result.addError("scheduler", inspection.Detail, "Run llmloot setup to enable the native schedule.")
+		result.addError("scheduler", inspection.Detail, "Run spolia setup to enable the native schedule.")
 	case currentState.Scheduler.ExecutablePath != desired.Executable || currentState.Scheduler.LocalTime != desired.LocalTime:
-		result.addError("scheduler", "the installed schedule does not match the current executable path or configured time", "Run llmloot setup to update the native schedule.")
+		result.addError("scheduler", "the installed schedule does not match the current executable path or configured time", "Run spolia setup to update the native schedule.")
 	default:
 		result.addOK("scheduler", fmt.Sprintf("%s %s at %s", inspection.Kind, inspection.Status, currentState.Scheduler.LocalTime))
 	}
@@ -295,5 +295,5 @@ func parseDoctorOptions(arguments []string) (doctorOptions, error) {
 }
 
 func printDoctorUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: llmloot doctor [--json]")
+	fmt.Fprintln(writer, "usage: spolia doctor [--json]")
 }

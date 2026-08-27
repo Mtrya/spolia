@@ -19,7 +19,7 @@ func AcquireLock(path string) (*Lock, error) {
 	}
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if errors.Is(err, os.ErrExist) {
-		return nil, fmt.Errorf("another llmloot process holds the lock, or a stale lock remains at %s; if no llmloot process is running, remove that file", path)
+		return nil, fmt.Errorf("another spolia process holds the lock, or a stale lock remains at %s; if no spolia process is running, remove that file", path)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("create process lock: %w", err)

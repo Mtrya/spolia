@@ -9,11 +9,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/Mtrya/llmloot/internal/app"
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/schedule"
-	"github.com/Mtrya/llmloot/internal/state"
-	"github.com/Mtrya/llmloot/internal/target/kimicode"
+	"github.com/Mtrya/spolia/internal/app"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/schedule"
+	"github.com/Mtrya/spolia/internal/state"
+	"github.com/Mtrya/spolia/internal/target/kimicode"
 )
 
 type uninstallOptions struct {
@@ -139,7 +139,7 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 			fmt.Fprintln(stderr, err)
 			return 1
 		}
-		confirmed, err := askYesNo(bufio.NewReader(os.Stdin), stdout, "Remove these llmloot-owned artifacts?", false)
+		confirmed, err := askYesNo(bufio.NewReader(os.Stdin), stdout, "Remove these spolia-owned artifacts?", false)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
@@ -253,5 +253,5 @@ func parseUninstallOptions(arguments []string) (uninstallOptions, error) {
 }
 
 func printUninstallUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: llmloot uninstall [--dry-run] [--yes] [--json]")
+	fmt.Fprintln(writer, "usage: spolia uninstall [--dry-run] [--yes] [--json]")
 }

@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Mtrya/llmloot/internal/atomicfile"
+	"github.com/Mtrya/spolia/internal/atomicfile"
 )
 
-const managedSystemdMarker = "# Managed by llmloot.\n"
+const managedSystemdMarker = "# Managed by spolia.\n"
 
 func (manager Manager) Kind() string {
 	return "systemd_user_timer"
@@ -44,7 +44,7 @@ func (manager Manager) Install(ctx context.Context, definition Definition) (Insp
 	for _, path := range artifacts {
 		contents, readErr := os.ReadFile(path)
 		if readErr == nil && !bytes.HasPrefix(contents, []byte(managedSystemdMarker)) {
-			return Inspection{}, fmt.Errorf("scheduler artifact %s already exists and is not managed by llmloot", path)
+			return Inspection{}, fmt.Errorf("scheduler artifact %s already exists and is not managed by spolia", path)
 		}
 		if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
 			return Inspection{}, fmt.Errorf("inspect scheduler artifact %s: %w", path, readErr)
@@ -124,7 +124,7 @@ func (manager Manager) Inspect(ctx context.Context, definition Definition) (Insp
 	}
 	if !inspection.Managed {
 		inspection.Status = "unmanaged"
-		inspection.Detail = "the systemd unit files do not carry the llmloot ownership marker"
+		inspection.Detail = "the systemd unit files do not carry the spolia ownership marker"
 		return inspection, nil
 	}
 	enabledOutput, enabledErr := schedulerCommand(ctx, "systemctl", "--user", "is-enabled", manager.identifier+".timer")
@@ -193,8 +193,8 @@ func (manager Manager) renderSystemd(definition Definition) ([]byte, []byte, err
 	if err != nil {
 		return nil, nil, err
 	}
-	service := fmt.Sprintf("%s[Unit]\nDescription=Refresh llmloot model opportunities\n\n[Service]\nType=oneshot\nExecStart=%s sync --if-due --quiet\n", managedSystemdMarker, executable)
-	timer := fmt.Sprintf("%s[Unit]\nDescription=Daily llmloot model refresh\n\n[Timer]\nOnCalendar=*-*-* %s:00\nPersistent=true\nUnit=%s.service\n\n[Install]\nWantedBy=timers.target\n", managedSystemdMarker, definition.LocalTime, manager.identifier)
+	service := fmt.Sprintf("%s[Unit]\nDescription=Refresh spolia model opportunities\n\n[Service]\nType=oneshot\nExecStart=%s sync --if-due --quiet\n", managedSystemdMarker, executable)
+	timer := fmt.Sprintf("%s[Unit]\nDescription=Daily spolia model refresh\n\n[Timer]\nOnCalendar=*-*-* %s:00\nPersistent=true\nUnit=%s.service\n\n[Install]\nWantedBy=timers.target\n", managedSystemdMarker, definition.LocalTime, manager.identifier)
 	return []byte(service), []byte(timer), nil
 }
 

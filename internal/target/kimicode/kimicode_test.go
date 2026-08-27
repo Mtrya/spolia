@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Mtrya/llmloot/internal/state"
+	"github.com/Mtrya/spolia/internal/state"
 )
 
 func TestRealKimiValidatesLifecycleAndPreservesUnrelatedContent(t *testing.T) {

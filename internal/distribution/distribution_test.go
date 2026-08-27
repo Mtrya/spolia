@@ -10,12 +10,12 @@ import (
 func TestReleaseTargetAndAssetContract(t *testing.T) {
 	t.Parallel()
 	wanted := []string{
-		"llmloot_1.2.3_darwin_amd64.tar.gz",
-		"llmloot_1.2.3_darwin_arm64.tar.gz",
-		"llmloot_1.2.3_linux_amd64.tar.gz",
-		"llmloot_1.2.3_linux_arm64.tar.gz",
-		"llmloot_1.2.3_windows_amd64.zip",
-		"llmloot_1.2.3_windows_arm64.zip",
+		"spolia_1.2.3_darwin_amd64.tar.gz",
+		"spolia_1.2.3_darwin_arm64.tar.gz",
+		"spolia_1.2.3_linux_amd64.tar.gz",
+		"spolia_1.2.3_linux_arm64.tar.gz",
+		"spolia_1.2.3_windows_amd64.zip",
+		"spolia_1.2.3_windows_arm64.zip",
 	}
 	if len(Targets) != len(wanted) {
 		t.Fatalf("targets = %#v", Targets)

@@ -246,7 +246,7 @@ func parseHeaderPath(line []byte) []string {
 		return nil
 	}
 	var decoded map[string]any
-	probe := append(append([]byte(nil), trimmed...), []byte("\n__llmloot_section_marker__ = true\n")...)
+	probe := append(append([]byte(nil), trimmed...), []byte("\n__spolia_section_marker__ = true\n")...)
 	if toml.Unmarshal(probe, &decoded) != nil {
 		return nil
 	}
@@ -254,7 +254,7 @@ func parseHeaderPath(line []byte) []string {
 }
 
 func findMarker(current map[string]any, path []string) []string {
-	if marker, okay := current["__llmloot_section_marker__"].(bool); okay && marker {
+	if marker, okay := current["__spolia_section_marker__"].(bool); okay && marker {
 		return path
 	}
 	keys := make([]string, 0, len(current))

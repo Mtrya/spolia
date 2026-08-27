@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/app"
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/output"
-	"github.com/Mtrya/llmloot/internal/state"
-	"github.com/Mtrya/llmloot/internal/target/kimicode"
+	"github.com/Mtrya/spolia/internal/app"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/output"
+	"github.com/Mtrya/spolia/internal/state"
+	"github.com/Mtrya/spolia/internal/target/kimicode"
 	"golang.org/x/term"
 )
 
@@ -434,5 +434,5 @@ func parseSetupOptions(arguments []string) (setupOptions, error) {
 }
 
 func printSetupUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: llmloot setup [--yes] [--no-schedule] [--json]")
+	fmt.Fprintln(writer, "usage: spolia setup [--yes] [--no-schedule] [--json]")
 }

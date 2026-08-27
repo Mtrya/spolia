@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Mtrya/llmloot/internal/distribution"
+	"github.com/Mtrya/spolia/internal/distribution"
 )
 
 func main() {

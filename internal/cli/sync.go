@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/app"
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/output"
-	"github.com/Mtrya/llmloot/internal/schedule"
-	"github.com/Mtrya/llmloot/internal/state"
-	"github.com/Mtrya/llmloot/internal/target/kimicode"
+	"github.com/Mtrya/spolia/internal/app"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/output"
+	"github.com/Mtrya/spolia/internal/schedule"
+	"github.com/Mtrya/spolia/internal/state"
+	"github.com/Mtrya/spolia/internal/target/kimicode"
 )
 
 type syncOptions struct {
@@ -71,7 +71,7 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 			return 1
 		}
 		if !exists {
-			fmt.Fprintln(stderr, "ownership state is missing; run llmloot setup before sync")
+			fmt.Fprintln(stderr, "ownership state is missing; run spolia setup before sync")
 			return 1
 		}
 		due, dueErr := syncIsDue(configuration, preflightState)
@@ -100,7 +100,7 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 		return 1
 	}
 	if !exists {
-		fmt.Fprintln(stderr, "ownership state is missing; run llmloot setup before sync")
+		fmt.Fprintln(stderr, "ownership state is missing; run spolia setup before sync")
 		return 1
 	}
 	if options.ifDue {
@@ -230,5 +230,5 @@ func parseSyncOptions(arguments []string) (syncOptions, error) {
 }
 
 func printSyncUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: llmloot sync [job] [--dry-run] [--if-due] [--quiet] [--json]")
+	fmt.Fprintln(writer, "usage: spolia sync [job] [--dry-run] [--if-due] [--quiet] [--json]")
 }

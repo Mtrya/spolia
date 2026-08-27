@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/model"
-	"github.com/Mtrya/llmloot/internal/source"
+	"github.com/Mtrya/spolia/internal/model"
+	"github.com/Mtrya/spolia/internal/source"
 )
 
 const defaultEndpoint = "https://openrouter.ai/api/v1/models"
@@ -45,7 +45,7 @@ func (adapter *Adapter) Fetch(ctx context.Context, apiKey string) (source.Catalo
 	}
 	request.Header.Set("Authorization", "Bearer "+apiKey)
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("User-Agent", "llmloot/0.1")
+	request.Header.Set("User-Agent", "spolia/0.1")
 	contents, err := source.Fetch(adapter.client, request)
 	if err != nil {
 		return source.Catalog{}, fmt.Errorf("OpenRouter: %w", err)

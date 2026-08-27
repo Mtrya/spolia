@@ -23,10 +23,10 @@ func TestSaveRoundTripsOwnershipWithoutCredentialMaterial(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "state.json")
 	current := New()
-	current.LLMlootVersion = "test"
+	current.SpoliaVersion = "test"
 	boundary := time.Date(2026, 8, 27, 1, 0, 0, 0, time.UTC)
 	current.SatisfyScheduleBoundary(boundary)
-	current.Scheduler = &SchedulerState{Kind: "systemd", Identifier: "io.github.mtrya.llmloot", ExecutablePath: "/isolated/llmloot", LocalTime: "09:00", LastStatus: "enabled"}
+	current.Scheduler = &SchedulerState{Kind: "systemd", Identifier: "io.github.mtrya.spolia", ExecutablePath: "/isolated/spolia", LocalTime: "09:00", LastStatus: "enabled"}
 	current.Targets["kimi-code"] = TargetState{
 		Path: "/isolated/config.toml",
 		Providers: map[string]ProviderOwnership{
@@ -82,7 +82,7 @@ func TestStateWithTrailingDataFails(t *testing.T) {
 
 func TestProcessLockIsExclusiveAndRemoved(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "llmloot.lock")
+	path := filepath.Join(t.TempDir(), "spolia.lock")
 	lock, err := AcquireLock(path)
 	if err != nil {
 		t.Fatal(err)

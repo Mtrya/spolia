@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Mtrya/llmloot/internal/app"
+	"github.com/Mtrya/spolia/internal/app"
 )
 
 func JSON(writer io.Writer, result app.SyncResult) error {

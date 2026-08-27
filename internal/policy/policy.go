@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/model"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/model"
 )
 
 type Options struct {

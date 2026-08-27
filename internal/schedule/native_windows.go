@@ -15,7 +15,7 @@ import (
 	"unicode/utf16"
 )
 
-const managedTaskSource = "llmloot"
+const managedTaskSource = "spolia"
 
 type taskDocument struct {
 	RegistrationInfo struct {
@@ -64,14 +64,14 @@ func (manager Manager) Install(ctx context.Context, definition Definition) (Insp
 			return Inspection{}, fmt.Errorf("parse existing scheduled task: %w", parseErr)
 		}
 		if !manager.isManaged(parsed) {
-			return Inspection{}, fmt.Errorf("scheduled task \\%s already exists and is not managed by llmloot", manager.identifier)
+			return Inspection{}, fmt.Errorf("scheduled task \\%s already exists and is not managed by spolia", manager.identifier)
 		}
 	}
 	contents, err := manager.renderTask(ctx, definition)
 	if err != nil {
 		return Inspection{}, err
 	}
-	temporary, err := os.CreateTemp("", "llmloot-task-*.xml")
+	temporary, err := os.CreateTemp("", "spolia-task-*.xml")
 	if err != nil {
 		return Inspection{}, fmt.Errorf("create temporary task definition: %w", err)
 	}
@@ -121,7 +121,7 @@ func (manager Manager) Inspect(ctx context.Context, definition Definition) (Insp
 	switch {
 	case !inspection.Managed:
 		inspection.Status = "unmanaged"
-		inspection.Detail = "the scheduled task does not carry the llmloot source and URI"
+		inspection.Detail = "the scheduled task does not carry the spolia source and URI"
 	case !inspection.Enabled:
 		inspection.Status = "disabled"
 		inspection.Detail = "the scheduled task is disabled"

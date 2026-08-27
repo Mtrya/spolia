@@ -14,29 +14,29 @@ import (
 
 func TestLaunchAgentSeparatesProgramArguments(t *testing.T) {
 	t.Parallel()
-	manager, err := New("io.github.mtrya.llmloot.test")
+	manager, err := New("io.github.mtrya.spolia.test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	contents, err := manager.renderLaunchAgent(Definition{Executable: "/tmp/llmloot & test", LocalTime: "09:05"})
+	contents, err := manager.renderLaunchAgent(Definition{Executable: "/tmp/spolia & test", LocalTime: "09:05"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(contents)
-	if !strings.Contains(text, "<string>/tmp/llmloot &amp; test</string>") || !strings.Contains(text, "<string>--if-due</string>") || !strings.Contains(text, "<integer>9</integer>") {
+	if !strings.Contains(text, "<string>/tmp/spolia &amp; test</string>") || !strings.Contains(text, "<string>--if-due</string>") || !strings.Contains(text, "<integer>9</integer>") {
 		t.Fatalf("plist = %s", text)
 	}
 }
 
 func TestNativeLaunchAgentLifecycle(t *testing.T) {
-	if os.Getenv("LLMLOOT_NATIVE_SCHEDULE_TEST") != "1" {
-		t.Skip("set LLMLOOT_NATIVE_SCHEDULE_TEST=1 to exercise the real user scheduler")
+	if os.Getenv("SPOLIA_NATIVE_SCHEDULE_TEST") != "1" {
+		t.Skip("set SPOLIA_NATIVE_SCHEDULE_TEST=1 to exercise the real user scheduler")
 	}
 	executable, err := exec.LookPath("true")
 	if err != nil {
 		t.Fatal(err)
 	}
-	identifier := fmt.Sprintf("io.github.mtrya.llmloot.test.%d.%d", os.Getpid(), time.Now().UnixNano())
+	identifier := fmt.Sprintf("io.github.mtrya.spolia.test.%d.%d", os.Getpid(), time.Now().UnixNano())
 	manager, err := New(identifier)
 	if err != nil {
 		t.Fatal(err)

@@ -14,10 +14,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Mtrya/llmloot/internal/atomicfile"
+	"github.com/Mtrya/spolia/internal/atomicfile"
 )
 
-const managedLaunchdMarker = "<!-- Managed by llmloot. -->"
+const managedLaunchdMarker = "<!-- Managed by spolia. -->"
 
 func (manager Manager) Kind() string {
 	return "launch_agent"
@@ -41,7 +41,7 @@ func (manager Manager) Install(ctx context.Context, definition Definition) (Insp
 	}
 	existing, readErr := os.ReadFile(artifacts[0])
 	if readErr == nil && !bytes.Contains(existing, []byte(managedLaunchdMarker)) {
-		return Inspection{}, fmt.Errorf("scheduler artifact %s already exists and is not managed by llmloot", artifacts[0])
+		return Inspection{}, fmt.Errorf("scheduler artifact %s already exists and is not managed by spolia", artifacts[0])
 	}
 	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
 		return Inspection{}, fmt.Errorf("inspect scheduler artifact %s: %w", artifacts[0], readErr)
@@ -96,7 +96,7 @@ func (manager Manager) Inspect(ctx context.Context, definition Definition) (Insp
 	inspection.Matches = bytes.Equal(contents, expected)
 	if !inspection.Managed {
 		inspection.Status = "unmanaged"
-		inspection.Detail = "the LaunchAgent does not carry the llmloot ownership marker"
+		inspection.Detail = "the LaunchAgent does not carry the spolia ownership marker"
 		return inspection, nil
 	}
 	output, commandErr := schedulerCommand(ctx, "launchctl", "print", launchdDomain()+"/"+manager.identifier)

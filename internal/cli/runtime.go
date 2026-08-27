@@ -11,23 +11,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/app"
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/source"
-	"github.com/Mtrya/llmloot/internal/source/openrouter"
-	"github.com/Mtrya/llmloot/internal/source/zenmux"
-	"github.com/Mtrya/llmloot/internal/state"
-	"github.com/Mtrya/llmloot/internal/target/kimicode"
+	"github.com/Mtrya/spolia/internal/app"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/source"
+	"github.com/Mtrya/spolia/internal/source/openrouter"
+	"github.com/Mtrya/spolia/internal/source/zenmux"
+	"github.com/Mtrya/spolia/internal/state"
+	"github.com/Mtrya/spolia/internal/target/kimicode"
 )
 
 func application(credentials app.CredentialResolver) app.Application {
 	client := &http.Client{Timeout: 30 * time.Second}
 	openRouter := openrouter.New(client)
-	if endpoint := loopbackTestEndpoint("LLMLOOT_TEST_OPENROUTER_MODELS_ENDPOINT"); endpoint != "" {
+	if endpoint := loopbackTestEndpoint("SPOLIA_TEST_OPENROUTER_MODELS_ENDPOINT"); endpoint != "" {
 		openRouter = openrouter.NewAt(client, endpoint)
 	}
 	zenMux := zenmux.New(client)
-	if endpoint := loopbackTestEndpoint("LLMLOOT_TEST_ZENMUX_MODELS_ENDPOINT"); endpoint != "" {
+	if endpoint := loopbackTestEndpoint("SPOLIA_TEST_ZENMUX_MODELS_ENDPOINT"); endpoint != "" {
 		zenMux = zenmux.NewAt(client, endpoint)
 	}
 	return app.Application{
@@ -146,7 +146,7 @@ func attachTargetPlan(result *app.SyncResult, targetName, adapter string, plan k
 }
 
 func updateState(current *state.State, result app.SyncResult, targetName string, ownership state.TargetState) {
-	current.LLMlootVersion = Version
+	current.SpoliaVersion = Version
 	for sourceName, modelIDs := range result.Observed {
 		current.Observe(sourceName, modelIDs, result.AttemptedAt)
 	}

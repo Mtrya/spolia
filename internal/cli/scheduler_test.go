@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/config"
-	"github.com/Mtrya/llmloot/internal/schedule"
-	"github.com/Mtrya/llmloot/internal/state"
+	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/schedule"
+	"github.com/Mtrya/spolia/internal/state"
 )
 
 func TestOnlySuccessfulFullSyncSatisfiesScheduleBoundary(t *testing.T) {

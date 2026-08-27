@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Mtrya/llmloot/internal/config"
+	"github.com/Mtrya/spolia/internal/config"
 )
 
 func TestSyncOptionsAcceptJobBeforeOrAfterFlags(t *testing.T) {
@@ -70,12 +70,12 @@ func TestIfDueRejectsSingleJobAtTheCommandBoundary(t *testing.T) {
 }
 
 func TestCatalogEndpointOverrideIsLimitedToLoopback(t *testing.T) {
-	t.Setenv("LLMLOOT_TEST_ENDPOINT", "http://127.0.0.1:8080/models")
-	if endpoint := loopbackTestEndpoint("LLMLOOT_TEST_ENDPOINT"); endpoint == "" {
+	t.Setenv("SPOLIA_TEST_ENDPOINT", "http://127.0.0.1:8080/models")
+	if endpoint := loopbackTestEndpoint("SPOLIA_TEST_ENDPOINT"); endpoint == "" {
 		t.Fatal("loopback fixture endpoint was rejected")
 	}
-	t.Setenv("LLMLOOT_TEST_ENDPOINT", "https://example.com/models")
-	if endpoint := loopbackTestEndpoint("LLMLOOT_TEST_ENDPOINT"); endpoint != "" {
+	t.Setenv("SPOLIA_TEST_ENDPOINT", "https://example.com/models")
+	if endpoint := loopbackTestEndpoint("SPOLIA_TEST_ENDPOINT"); endpoint != "" {
 		t.Fatalf("non-loopback fixture endpoint was accepted: %q", endpoint)
 	}
 }

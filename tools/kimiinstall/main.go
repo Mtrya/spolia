@@ -183,7 +183,7 @@ func download(ctx context.Context, client *http.Client, location string, api boo
 		return nil, fmt.Errorf("build download request: %w", err)
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
-	request.Header.Set("User-Agent", "llmloot-release-check")
+	request.Header.Set("User-Agent", "spolia-release-check")
 	if api {
 		request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 		if token := os.Getenv("GITHUB_TOKEN"); token != "" {

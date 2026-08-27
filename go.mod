@@ -1,4 +1,4 @@
-module github.com/Mtrya/llmloot
+module github.com/Mtrya/spolia
 
 go 1.26
 

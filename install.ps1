@@ -1,18 +1,18 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$Repository = "Mtrya/llmloot"
-$LatestUrl = if ($env:LLMLOOT_LATEST_URL) { $env:LLMLOOT_LATEST_URL } else { "https://github.com/$Repository/releases/latest" }
-$InstallDir = if ($env:LLMLOOT_BIN_DIR) { $env:LLMLOOT_BIN_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\llmloot\bin" }
+$Repository = "Mtrya/spolia"
+$LatestUrl = if ($env:SPOLIA_LATEST_URL) { $env:SPOLIA_LATEST_URL } else { "https://github.com/$Repository/releases/latest" }
+$InstallDir = if ($env:SPOLIA_BIN_DIR) { $env:SPOLIA_BIN_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\spolia\bin" }
 
 switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
     "X64" { $Arch = "amd64" }
     "Arm64" { $Arch = "arm64" }
-    default { throw "llmloot does not provide a Windows archive for this architecture." }
+    default { throw "spolia does not provide a Windows archive for this architecture." }
 }
 
-if ($env:LLMLOOT_INSTALL_VERSION) {
-    $Version = $env:LLMLOOT_INSTALL_VERSION.TrimStart("v")
+if ($env:SPOLIA_INSTALL_VERSION) {
+    $Version = $env:SPOLIA_INSTALL_VERSION.TrimStart("v")
     $Tag = "v$Version"
 } else {
     $Response = Invoke-WebRequest -Uri $LatestUrl -UseBasicParsing
@@ -24,15 +24,15 @@ if ($env:LLMLOOT_INSTALL_VERSION) {
     }
     $Tag = ($ResolvedUrl.TrimEnd("/") -split "/")[-1]
     if ($Tag -notmatch '^v[0-9A-Za-z.+-]+$') {
-        throw "Could not determine the latest llmloot release from $ResolvedUrl."
+        throw "Could not determine the latest spolia release from $ResolvedUrl."
     }
     $Version = $Tag.Substring(1)
 }
 
-$DownloadRoot = if ($env:LLMLOOT_RELEASE_DOWNLOAD_URL) { $env:LLMLOOT_RELEASE_DOWNLOAD_URL.TrimEnd("/") } else { "https://github.com/$Repository/releases/download/$Tag" }
-$Asset = "llmloot_${Version}_windows_${Arch}.zip"
+$DownloadRoot = if ($env:SPOLIA_RELEASE_DOWNLOAD_URL) { $env:SPOLIA_RELEASE_DOWNLOAD_URL.TrimEnd("/") } else { "https://github.com/$Repository/releases/download/$Tag" }
+$Asset = "spolia_${Version}_windows_${Arch}.zip"
 $ArchiveRoot = [System.IO.Path]::GetFileNameWithoutExtension($Asset)
-$Temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("llmloot-install-" + [guid]::NewGuid().ToString("N"))
+$Temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("spolia-install-" + [guid]::NewGuid().ToString("N"))
 
 try {
     New-Item -ItemType Directory -Path $Temporary | Out-Null
@@ -53,14 +53,14 @@ try {
     }
     Expand-Archive -Path $ArchivePath -DestinationPath $Temporary
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    Copy-Item -Path (Join-Path $Temporary "$ArchiveRoot\llmloot.exe") -Destination (Join-Path $InstallDir "llmloot.exe") -Force
+    Copy-Item -Path (Join-Path $Temporary "$ArchiveRoot\spolia.exe") -Destination (Join-Path $InstallDir "spolia.exe") -Force
 } finally {
     if (Test-Path $Temporary) {
         Remove-Item -Path $Temporary -Recurse -Force
     }
 }
 
-Write-Output "Installed llmloot $Version to $InstallDir\llmloot.exe."
+Write-Output "Installed spolia $Version to $InstallDir\spolia.exe."
 if (($env:PATH -split ';') -notcontains $InstallDir) {
-    Write-Output "Add $InstallDir to your user PATH, then run: llmloot setup"
+    Write-Output "Add $InstallDir to your user PATH, then run: spolia setup"
 }

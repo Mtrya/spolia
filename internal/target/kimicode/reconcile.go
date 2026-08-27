@@ -8,8 +8,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/Mtrya/llmloot/internal/atomicfile"
-	"github.com/Mtrya/llmloot/internal/state"
+	"github.com/Mtrya/spolia/internal/atomicfile"
+	"github.com/Mtrya/spolia/internal/state"
 )
 
 type ProviderRequirement struct {
@@ -196,7 +196,7 @@ func (plan *Plan) ensureProvider(requirement ProviderRequirement) {
 	owned, wasOwned := plan.Ownership.Providers[requirement.Spec.ID]
 	if !inspection.Exists {
 		if wasOwned {
-			plan.addConflict("provider", requirement.Spec.ID, "llmloot-owned provider is missing")
+			plan.addConflict("provider", requirement.Spec.ID, "spolia-owned provider is missing")
 			return
 		}
 		if requirement.APIKey == "" {
@@ -316,7 +316,7 @@ func (plan *Plan) reconcileModel(desired ModelInput) {
 		return
 	}
 	if !exists || entry == nil {
-		plan.addConflict("model", desired.ID, "llmloot-owned alias is missing")
+		plan.addConflict("model", desired.ID, "spolia-owned alias is missing")
 		return
 	}
 	keys := unionKeys(owned.Fields, fields)
@@ -552,7 +552,7 @@ func (plan Plan) Validate(ctx context.Context, installation Installation) error 
 	if len(plan.Conflicts) > 0 {
 		return errors.New("target plan has conflicts")
 	}
-	temporary, err := os.CreateTemp("", "llmloot-kimi-config-*.toml")
+	temporary, err := os.CreateTemp("", "spolia-kimi-config-*.toml")
 	if err != nil {
 		return fmt.Errorf("create validation file: %w", err)
 	}

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/model"
+	"github.com/Mtrya/spolia/internal/model"
 )
 
 func TestParseRealCatalogFixture(t *testing.T) {

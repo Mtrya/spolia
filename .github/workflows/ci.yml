@@ -39,11 +39,11 @@ jobs:
       - name: Test
         run: go test -count=1 ./...
         env:
-          LLMLOOT_NATIVE_SCHEDULE_TEST: "1"
+          SPOLIA_NATIVE_SCHEDULE_TEST: "1"
       - name: Vet
         run: go vet ./...
       - name: Build
-        run: go build ./cmd/llmloot
+        run: go build ./cmd/spolia
 
   race:
     name: Race detector
@@ -126,6 +126,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Exercise installer and checksum failure
-        run: go run ./tools/installcheck --dist dist --version 0.0.0-ci --install-dir "${{ runner.temp }}/llmloot-bin"
+        run: go run ./tools/installcheck --dist dist --version 0.0.0-ci --install-dir "${{ runner.temp }}/spolia-bin"
       - name: Exercise release binary
-        run: go run ./tools/artifactcheck --bin-dir "${{ runner.temp }}/llmloot-bin" --source all
+        run: go run ./tools/artifactcheck --bin-dir "${{ runner.temp }}/spolia-bin" --source all

@@ -56,10 +56,10 @@ func TestIsDueUsesTheCurrentBoundary(t *testing.T) {
 
 func TestDefinitionRequiresAbsoluteExecutableAndStrictTime(t *testing.T) {
 	t.Parallel()
-	if err := ValidateDefinition(Definition{Executable: "llmloot", LocalTime: "09:00"}); err == nil {
+	if err := ValidateDefinition(Definition{Executable: "spolia", LocalTime: "09:00"}); err == nil {
 		t.Fatal("relative executable was accepted")
 	}
-	if err := ValidateDefinition(Definition{Executable: filepath.Join(string(filepath.Separator), "bin", "llmloot"), LocalTime: "9:00"}); err == nil {
+	if err := ValidateDefinition(Definition{Executable: filepath.Join(string(filepath.Separator), "bin", "spolia"), LocalTime: "9:00"}); err == nil {
 		t.Fatal("non-canonical time was accepted")
 	}
 }

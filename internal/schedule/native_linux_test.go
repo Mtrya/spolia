@@ -14,15 +14,15 @@ import (
 
 func TestSystemdDefinitionSeparatesTheExecutableFromArguments(t *testing.T) {
 	t.Parallel()
-	manager, err := New("llmloot-test")
+	manager, err := New("spolia-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, timer, err := manager.renderSystemd(Definition{Executable: "/tmp/llmloot path/%build", LocalTime: "09:05"})
+	service, timer, err := manager.renderSystemd(Definition{Executable: "/tmp/spolia path/%build", LocalTime: "09:05"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(service), `ExecStart="/tmp/llmloot path/%%build" sync --if-due --quiet`) {
+	if !strings.Contains(string(service), `ExecStart="/tmp/spolia path/%%build" sync --if-due --quiet`) {
 		t.Fatalf("service = %s", service)
 	}
 	if !strings.Contains(string(timer), "OnCalendar=*-*-* 09:05:00") || !strings.Contains(string(timer), "Persistent=true") {
@@ -31,8 +31,8 @@ func TestSystemdDefinitionSeparatesTheExecutableFromArguments(t *testing.T) {
 }
 
 func TestNativeSystemdLifecycle(t *testing.T) {
-	if os.Getenv("LLMLOOT_NATIVE_SCHEDULE_TEST") != "1" {
-		t.Skip("set LLMLOOT_NATIVE_SCHEDULE_TEST=1 to exercise the real user scheduler")
+	if os.Getenv("SPOLIA_NATIVE_SCHEDULE_TEST") != "1" {
+		t.Skip("set SPOLIA_NATIVE_SCHEDULE_TEST=1 to exercise the real user scheduler")
 	}
 	executable, err := exec.LookPath("true")
 	if err != nil {
@@ -42,7 +42,7 @@ func TestNativeSystemdLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	identifier := fmt.Sprintf("io.github.mtrya.llmloot.test.%d.%d", os.Getpid(), time.Now().UnixNano())
+	identifier := fmt.Sprintf("io.github.mtrya.spolia.test.%d.%d", os.Getpid(), time.Now().UnixNano())
 	manager, err := New(identifier)
 	if err != nil {
 		t.Fatal(err)

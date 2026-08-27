@@ -53,7 +53,7 @@ jobs:
       - name: Test the tagged source
         run: go test -count=1 ./...
         env:
-          LLMLOOT_NATIVE_SCHEDULE_TEST: "1"
+          SPOLIA_NATIVE_SCHEDULE_TEST: "1"
       - name: Vet the tagged source
         if: runner.os == 'Linux' && matrix.kimi == 'latest'
         run: go vet ./...
@@ -116,9 +116,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Exercise installer and checksum failure
-        run: go run ./tools/installcheck --dist dist --version "${{ inputs.tag }}" --install-dir "${{ runner.temp }}/llmloot-bin"
+        run: go run ./tools/installcheck --dist dist --version "${{ inputs.tag }}" --install-dir "${{ runner.temp }}/spolia-bin"
       - name: Exercise release binary
-        run: go run ./tools/artifactcheck --bin-dir "${{ runner.temp }}/llmloot-bin" --source all
+        run: go run ./tools/artifactcheck --bin-dir "${{ runner.temp }}/spolia-bin" --source all
 
   publish:
     name: Attest and publish
@@ -158,4 +158,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
-        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --title "llmloot $RELEASE_TAG" --generate-notes
+        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --title "spolia $RELEASE_TAG" --generate-notes

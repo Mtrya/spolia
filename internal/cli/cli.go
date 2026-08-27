@@ -36,5 +36,5 @@ func Run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int 
 }
 
 func printUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: llmloot <setup|sync|doctor|uninstall|help|version>")
+	fmt.Fprintln(writer, "usage: spolia <setup|sync|doctor|uninstall|help|version>")
 }

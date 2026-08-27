@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Mtrya/llmloot/internal/app"
+	"github.com/Mtrya/spolia/internal/app"
 	"github.com/pelletier/go-toml/v2"
 )
 

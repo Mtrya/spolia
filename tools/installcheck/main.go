@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/distribution"
+	"github.com/Mtrya/spolia/internal/distribution"
 )
 
 func main() {
@@ -44,13 +44,13 @@ func main() {
 	defer cleanServer.Close()
 	installed := *installDir
 	if installed == "" {
-		installed = filepath.Join(mustTempDir("llmloot-install-check-"), "bin")
+		installed = filepath.Join(mustTempDir("spolia-install-check-"), "bin")
 		defer os.RemoveAll(filepath.Dir(installed))
 	}
 	if output, err := runInstaller(context.Background(), cleanServer.URL, installed); err != nil {
 		fail(fmt.Errorf("installer rejected a valid archive: %w: %s", err, compact(output)))
 	}
-	binary := filepath.Join(installed, "llmloot")
+	binary := filepath.Join(installed, "spolia")
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
@@ -62,7 +62,7 @@ func main() {
 
 	corruptServer := newReleaseServer(*dist, version, asset, true)
 	defer corruptServer.Close()
-	corruptInstall := filepath.Join(mustTempDir("llmloot-install-corrupt-"), "bin")
+	corruptInstall := filepath.Join(mustTempDir("spolia-install-corrupt-"), "bin")
 	defer os.RemoveAll(filepath.Dir(corruptInstall))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -109,10 +109,10 @@ func runInstaller(ctx context.Context, downloadURL, binDir string) ([]byte, erro
 		command = exec.CommandContext(ctx, "bash", "install.sh")
 	}
 	command.Env = replaceEnvironment(os.Environ(), map[string]string{
-		"LLMLOOT_INSTALL_VERSION":      "",
-		"LLMLOOT_LATEST_URL":           downloadURL + "/releases/latest",
-		"LLMLOOT_RELEASE_DOWNLOAD_URL": downloadURL,
-		"LLMLOOT_BIN_DIR":              binDir,
+		"SPOLIA_INSTALL_VERSION":      "",
+		"SPOLIA_LATEST_URL":           downloadURL + "/releases/latest",
+		"SPOLIA_RELEASE_DOWNLOAD_URL": downloadURL,
+		"SPOLIA_BIN_DIR":              binDir,
 	})
 	return command.CombinedOutput()
 }

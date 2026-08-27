@@ -9,14 +9,14 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Mtrya/llmloot/internal/atomicfile"
+	"github.com/Mtrya/spolia/internal/atomicfile"
 )
 
 const SchemaVersion = 1
 
 type State struct {
 	SchemaVersion                  int                    `json:"schema_version"`
-	LLMlootVersion                 string                 `json:"llmloot_version,omitempty"`
+	SpoliaVersion                  string                 `json:"spolia_version,omitempty"`
 	Sources                        map[string]SourceState `json:"sources,omitempty"`
 	Jobs                           map[string]JobState    `json:"jobs,omitempty"`
 	Targets                        map[string]TargetState `json:"targets,omitempty"`

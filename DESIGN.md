@@ -2,7 +2,7 @@
 
 ## Scope
 
-llmloot is a small cross-platform Go CLI that discovers temporary model opportunities from configured sources and exposes eligible models in supported coding harnesses without silently widening the user's cost policy or changing the harness's active model.
+spolia is a small cross-platform Go CLI that discovers temporary model opportunities from configured sources and exposes eligible models in supported coding harnesses without silently widening the user's cost policy or changing the harness's active model.
 
 The supported product matrix is:
 
@@ -34,19 +34,19 @@ A stealth candidate must also meet the free-price contract and have explicit or 
 
 A free candidate has present, well-formed, zero prompt and completion prices across all tiers, plus zero for every other published billing dimension. Missing optional dimensions are not treated as malformed.
 
-Paid models are never eligible. Neither supported source exposes authoritative machine-readable discount evidence in its public catalog, so there is no discounted class; llmloot does not scrape badges, compare vendors, or maintain a reference price list.
+Paid models are never eligible. Neither supported source exposes authoritative machine-readable discount evidence in its public catalog, so there is no discounted class; spolia does not scrape badges, compare vendors, or maintain a reference price list.
 
 Only concrete OpenAI-compatible chat models with text output and a positive context window are eligible. Routers, automatic selectors, fallback aliases, and utilities are excluded. Tool use is accepted unless authoritative metadata explicitly disables it. Capabilities are emitted only from explicit normalized metadata.
 
 ## Credentials and Kimi Code
 
-A source participates only when its corresponding Kimi Code provider has an API key. Setup may adopt a compatible existing provider or copy a bootstrap environment credential into Kimi Code. Later discovery resolves the credential through Kimi Code so catalog access and inference use the same account. llmloot does not persist credentials in its own files.
+A source participates only when its corresponding Kimi Code provider has an API key. Setup may adopt a compatible existing provider or copy a bootstrap environment credential into Kimi Code. Later discovery resolves the credential through Kimi Code so catalog access and inference use the same account. spolia does not persist credentials in its own files.
 
-Provider IDs are `openrouter` and `zenmux`; model aliases are exact upstream IDs and the provider field determines routing. llmloot never changes Kimi Code's default model, secondary-model settings, global thinking settings, permissions, or active sessions.
+Provider IDs are `openrouter` and `zenmux`; model aliases are exact upstream IDs and the provider field determines routing. spolia never changes Kimi Code's default model, secondary-model settings, global thinking settings, permissions, or active sessions.
 
-State records only provider and model entries created by llmloot and the last non-secret semantic values it wrote. Existing providers and models remain user-owned. A conflict is reported only when the current operation would overwrite or remove a relevant semantic value changed by the user. Whole-entry deletion also protects newly added user fields.
+State records only provider and model entries created by spolia and the last non-secret semantic values it wrote. Existing providers and models remain user-owned. A conflict is reported only when the current operation would overwrite or remove a relevant semantic value changed by the user. Whole-entry deletion also protects newly added user fields.
 
-Reconciliation holds one llmloot process lock, validates a temporary target with the real Kimi Code binary, checks that the original did not change after planning, and atomically replaces it. State is written atomically after the target. Missing or corrupt ownership state stops writes; there is no automated reconstruction or write-ahead journal.
+Reconciliation holds one spolia process lock, validates a temporary target with the real Kimi Code binary, checks that the original did not change after planning, and atomically replaces it. State is written atomically after the target. Missing or corrupt ownership state stops writes; there is no automated reconstruction or write-ahead journal.
 
 ## Scheduling
 
@@ -59,12 +59,12 @@ Linux uses a systemd user timer, macOS uses a LaunchAgent, and Windows uses Task
 Release assets use a frozen naming contract:
 
 ```text
-llmloot_VERSION_linux_amd64.tar.gz
-llmloot_VERSION_linux_arm64.tar.gz
-llmloot_VERSION_darwin_amd64.tar.gz
-llmloot_VERSION_darwin_arm64.tar.gz
-llmloot_VERSION_windows_amd64.zip
-llmloot_VERSION_windows_arm64.zip
+spolia_VERSION_linux_amd64.tar.gz
+spolia_VERSION_linux_arm64.tar.gz
+spolia_VERSION_darwin_amd64.tar.gz
+spolia_VERSION_darwin_arm64.tar.gz
+spolia_VERSION_windows_amd64.zip
+spolia_VERSION_windows_arm64.zip
 SHA256SUMS
 ```
 

@@ -11,7 +11,7 @@ import (
 	"unicode"
 )
 
-const DefaultIdentifier = "io.github.mtrya.llmloot"
+const DefaultIdentifier = "io.github.mtrya.spolia"
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
