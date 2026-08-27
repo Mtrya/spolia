@@ -60,6 +60,7 @@ This plan records the product decisions agreed on 2026-08-27. When an upstream c
 - Platforms: Linux, macOS, and Windows.
 - Implementation: standalone Go binary with compiled-in adapters.
 - Public CLI commands: `setup`, `sync`, `doctor`, and `uninstall`, plus conventional help and version output.
+- Distribution: GitHub release archives with checksums, `go install`, and one-line install scripts (`install.sh` for Linux/macOS, `install.ps1` for Windows) that verify checksums before installing per-user. Package-manager publication and self-update remain out of scope.
 - One global daily schedule processes all enabled jobs. There is no daemon, resident service, file watcher, tray application, hook, or notification system.
 - No public plugin API, dynamic plugin loading, self-update, package-manager publication, telemetry, automated repair command, or user-facing inference probe in v1.
 - Do not support legacy `kimi-cli` or add compatibility code for its files.
@@ -432,7 +433,7 @@ Deliver one reliable daily per-user sync on Linux, macOS, and Windows and prove 
 
 #### Out Of Scope
 
-- Cron, system-wide tasks, per-job schedules, notifications, a resident process, inference, installers, and repository publication.
+- Cron, system-wide tasks, per-job schedules, notifications, a resident process, inference, and repository publication.
 
 #### Validation
 
@@ -466,18 +467,20 @@ Produce reproducible artifacts and pass the complete pre-public validation contr
 #### In Scope
 
 - Secure CI, target-appropriate release builds, checksums/provenance, MIT license, concise public README, installation instructions, and a repository-owned Linux live-check tool.
+- One-line install scripts: `install.sh` for Linux/macOS (`curl ... | bash`) and `install.ps1` for Windows (`irm ... | iex`). Each resolves the latest release through the stable release redirect rather than API negotiation, verifies the downloaded archive against the published checksums before installing, installs per-user without elevated privileges, and prints PATH guidance. Once the scripts ship, release asset names and the checksum file format become a frozen compatibility contract.
 - The live-check tool runs the two required cells: OpenRouter → Kimi Code → Linux and ZenMux → Kimi Code → Linux.
 - Each cell uses an isolated Kimi Code home, runs actual setup/sync output, starts the real Kimi Code binary with the selected model, completes a harmless end-to-end tool-use turn, and emits one redacted machine-readable report.
 - The human operator may explicitly change a cell's policy between runs from stealth to free and then discounted with declared ceilings. The tool never widens policy automatically.
 
 #### Out Of Scope
 
-- Provider secrets in public CI, automatic live inference schedules, package-manager submissions, self-update, code signing/notarization unless separately requested, and creating/publishing the GitHub repository before the gate passes.
+- Provider secrets in public CI, automatic live inference schedules, package-manager submissions, self-update, system-wide or elevated installation, code signing/notarization unless separately requested, and creating/publishing the GitHub repository before the gate passes.
 
 #### Validation
 
 - Clean-checkout CI passes on Linux, macOS, and Windows with real Kimi Code minimum/latest validation and native scheduler coverage.
 - Release artifacts execute `version`, fixture dry-run, and doctor on their target operating systems; release architectures are claimed only where current Kimi Code support and native/cross-build evidence exist.
+- Native runners execute each install script in a clean environment on its target operating system: the installed binary runs, and a deliberately corrupted archive fails checksum verification and aborts the install.
 - The two-cell live report records source, selected model, eligibility class, price ceilings when applicable, llmloot version, Kimi Code version, OS, tool-use success, and redacted failure information.
 - Audit public docs, workflow logs, test output, and artifacts for credentials, local paths, stale legacy names, and internal roadmap terminology.
 
@@ -485,6 +488,7 @@ Produce reproducible artifacts and pass the complete pre-public validation contr
 
 - Both Linux live cells pass with actual Kimi Code tool use. A zero-candidate cell or substituted direct API request does not pass.
 - Native CI passes for configuration, reconciliation, scheduling, and uninstall on all three supported operating systems.
+- Both install scripts pass their native smoke checks, including checksum-failure abortion.
 - Release artifacts, checksums, provenance, license, and docs reproduce from a clean tag.
 - The repository remains private until these checks pass; the first public release is created only afterward through an explicitly authorized repository/release workflow.
 
@@ -517,6 +521,10 @@ Kimi Code intentionally stores provider keys in its configuration. llmloot reuse
 ### Platform differences
 
 POSIX file and scheduler assumptions do not apply to Windows. Platform claims require native runner evidence, and release architectures must follow actual Kimi Code availability rather than an aspirational matrix.
+
+### Install script contract
+
+The one-line install scripts turn release asset names and the checksum file format into a permanent compatibility contract, and `curl | bash` distribution makes the scripts the most scrutinized files in the repository. Keep them minimal: latest release only, per-user install, mandatory checksum verification, no elevated privileges. SmartScreen and Gatekeeper friction for unsigned binaries remains accepted v1 behavior; revisit code signing only with user evidence.
 
 ## Overall Exit Criteria
 
