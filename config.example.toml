@@ -1,0 +1,39 @@
+schema_version = 1
+source_priority = ["openrouter", "zenmux"]
+
+[schedule]
+enabled = true
+local_time = "09:00"
+
+[sources.openrouter]
+adapter = "openrouter"
+credential_env = "OPENROUTER_API_KEY"
+
+[sources.zenmux]
+adapter = "zenmux"
+credential_env = "ZENMUX_API_KEY"
+
+[targets.kimi-code]
+adapter = "kimi-code"
+
+[jobs.openrouter-kimi-code]
+enabled = true
+source = "openrouter"
+target = "kimi-code"
+limit = 3
+min_context = 131072
+
+[jobs.openrouter-kimi-code.policy]
+include_free = false
+include_discounted = false
+
+[jobs.zenmux-kimi-code]
+enabled = true
+source = "zenmux"
+target = "kimi-code"
+limit = 3
+min_context = 131072
+
+[jobs.zenmux-kimi-code.policy]
+include_free = false
+include_discounted = false

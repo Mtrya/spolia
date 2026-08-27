@@ -1,0 +1,108 @@
+{
+  "data": [
+    {
+      "id": "openrouter/quasar-alpha",
+      "name": "Quasar Alpha",
+      "description": "This is a cloaked model provided to the community to gather feedback. It is a powerful, all-purpose model supporting long-context tasks, including code generation.",
+      "created": 1743552000,
+      "context_length": 1000000,
+      "architecture": {
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"],
+        "tokenizer": "Other"
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 32768
+      },
+      "supported_parameters": ["max_tokens", "tool_choice", "tools"],
+      "expiration_date": null,
+      "alias_target": null
+    },
+    {
+      "id": "dots-studio/dots-3-note-preview:free",
+      "name": "Dots Studio: Dots3-Note Preview (free)",
+      "description": "Dots3-Note Preview is an open-weight mixture-of-experts model from Dots Studio.",
+      "created": 1786680361,
+      "context_length": 512000,
+      "architecture": {
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"],
+        "tokenizer": "Other"
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      },
+      "top_provider": {
+        "context_length": 512000,
+        "max_completion_tokens": 460800
+      },
+      "supported_parameters": ["include_reasoning", "max_tokens", "reasoning", "tool_choice", "tools"],
+      "expiration_date": "2026-09-30",
+      "reasoning": {"mandatory": false},
+      "alias_target": null
+    },
+    {
+      "id": "openrouter/free",
+      "name": "Free Models Router",
+      "description": "openrouter/free is a router that selects free models at random.",
+      "created": 1769917427,
+      "context_length": 200000,
+      "architecture": {
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"],
+        "tokenizer": "Router"
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      },
+      "top_provider": {
+        "context_length": null,
+        "max_completion_tokens": null
+      },
+      "supported_parameters": ["max_tokens", "tool_choice", "tools"],
+      "expiration_date": null,
+      "alias_target": null
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash-vision-exp",
+      "name": "DeepSeek: DeepSeek V4 Flash Vision Exp",
+      "description": "DeepSeek V4 Flash Vision Exp is an experimental vision-enabled model.",
+      "created": 1787311563,
+      "context_length": 1048576,
+      "architecture": {
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"],
+        "tokenizer": "DeepSeek"
+      },
+      "pricing": {
+        "prompt": "0.00000044",
+        "completion": "0.00000132",
+        "input_cache_read": "0.000000014",
+        "overrides": [
+          {
+            "utc_days": ["saturday", "sunday"],
+            "prompt": "0.00000022",
+            "completion": "0.00000066",
+            "input_cache_read": "0.000000007"
+          }
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 384000
+      },
+      "supported_parameters": ["include_reasoning", "max_tokens", "reasoning", "tool_choice", "tools"],
+      "expiration_date": null,
+      "reasoning": {"mandatory": false},
+      "alias_target": null
+    }
+  ],
+  "total_count": 417
+}

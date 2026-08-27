@@ -1,0 +1,49 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "deepseek/deepseek-v4-flash-vision-exp-free",
+      "display_name": "DeepSeek: DeepSeek V4 Flash Vision Exp (Free)",
+      "created": 1787305220,
+      "publish_time": "2026-08-21",
+      "input_modalities": ["image", "text"],
+      "output_modalities": ["text"],
+      "capabilities": {"reasoning": true},
+      "context_length": 1000000,
+      "pricings": {
+        "completion": [{"value": 0, "unit": "perMTokens", "currency": "USD"}],
+        "input_cache_read": [{"value": 0, "unit": "perMTokens", "currency": "USD"}],
+        "prompt": [{"value": 0, "unit": "perMTokens", "currency": "USD"}]
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.5",
+      "display_name": "Anthropic: Claude Sonnet 4.5",
+      "created": 1759196009,
+      "publish_time": "2025-09-29",
+      "input_modalities": ["text", "image", "file"],
+      "output_modalities": ["text"],
+      "capabilities": {"reasoning": true},
+      "context_length": 1000000,
+      "pricings": {
+        "completion": [
+          {"value": 15, "unit": "perMTokens", "currency": "USD", "conditions": {"prompt_tokens": {"unit": "kTokens", "gte": 0, "lt": 200}}},
+          {"value": 22.5, "unit": "perMTokens", "currency": "USD", "conditions": {"prompt_tokens": {"unit": "kTokens", "gte": 200}}}
+        ],
+        "input_cache_read": [
+          {"value": 0.3, "unit": "perMTokens", "currency": "USD", "conditions": {"prompt_tokens": {"unit": "kTokens", "gte": 0, "lt": 200}}},
+          {"value": 0.6, "unit": "perMTokens", "currency": "USD", "conditions": {"prompt_tokens": {"unit": "kTokens", "gte": 200}}}
+        ],
+        "input_cache_write_1_h": [
+          {"value": 6, "unit": "perMTokens", "currency": "USD", "conditions": {"prompt_tokens": {"unit": "kTokens", "gte": 0, "lt": 200}}},
+          {"value": 12, "unit": "perMTokens", "currency": "USD", "conditions": {"prompt_tokens": {"unit": "kTokens", "gte": 200}}}
+        ],
+        "prompt": [
+          {"value": 3, "unit": "perMTokens", "currency": "USD", "conditions": {"prompt_tokens": {"unit": "kTokens", "gte": 0, "lt": 200}}},
+          {"value": 6, "unit": "perMTokens", "currency": "USD", "conditions": {"prompt_tokens": {"unit": "kTokens", "gte": 200}}}
+        ],
+        "web_search": [{"value": 0.01, "unit": "perCount", "currency": "USD"}]
+      }
+    }
+  ]
+}
