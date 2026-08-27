@@ -31,8 +31,8 @@ type taskDocument struct {
 		} `xml:"CalendarTrigger"`
 	} `xml:"Triggers"`
 	Settings struct {
-		StartWhenAvailable bool `xml:"StartWhenAvailable"`
-		Enabled            bool `xml:"Enabled"`
+		StartWhenAvailable bool  `xml:"StartWhenAvailable"`
+		Enabled            *bool `xml:"Enabled"`
 	} `xml:"Settings"`
 	Actions struct {
 		Exec struct {
@@ -116,7 +116,7 @@ func (manager Manager) Inspect(ctx context.Context, definition Definition) (Insp
 	}
 	inspection.Installed = true
 	inspection.Managed = manager.isManaged(parsed)
-	inspection.Enabled = parsed.Settings.Enabled
+	inspection.Enabled = taskEnabled(parsed.Settings.Enabled)
 	inspection.Matches = manager.matches(parsed, definition)
 	switch {
 	case !inspection.Managed:
@@ -184,7 +184,6 @@ func (manager Manager) renderTask(ctx context.Context, definition Definition) ([
   <Triggers>
     <CalendarTrigger>
       <StartBoundary>2000-01-01T%s:00</StartBoundary>
-      <Enabled>true</Enabled>
       <ScheduleByDay>
         <DaysInterval>1</DaysInterval>
       </ScheduleByDay>
@@ -266,7 +265,7 @@ func (manager Manager) matches(task taskDocument, definition Definition) bool {
 		task.Triggers.Calendar.ScheduleByDay.DaysInterval == 1 &&
 		boundaryTime == definition.LocalTime &&
 		task.Settings.StartWhenAvailable &&
-		task.Settings.Enabled &&
+		taskEnabled(task.Settings.Enabled) &&
 		strings.EqualFold(filepath.Clean(task.Actions.Exec.Command), filepath.Clean(definition.Executable)) &&
 		task.Actions.Exec.Arguments == strings.Join(commandArguments(), " ")
 }
@@ -293,6 +292,12 @@ func normalizeTaskXML(contents []byte) []byte {
 	contents = bytes.ReplaceAll(contents, []byte(`encoding="UTF-16"`), []byte(`encoding="UTF-8"`))
 	contents = bytes.ReplaceAll(contents, []byte(`encoding="utf-16"`), []byte(`encoding="UTF-8"`))
 	return bytes.TrimSpace(contents)
+}
+
+// Exported task XML omits Settings.Enabled unless the task is disabled, so an
+// absent element means enabled.
+func taskEnabled(enabled *bool) bool {
+	return enabled == nil || *enabled
 }
 
 func xmlText(value string) (string, error) {
