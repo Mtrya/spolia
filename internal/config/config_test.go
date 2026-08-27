@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -80,7 +81,8 @@ func TestDefaultConfigurationSavesAndLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if information.Mode().Perm()&0o077 != 0 {
+	// Windows reports a synthetic 0666 regardless of the requested mode.
+	if runtime.GOOS != "windows" && information.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("config mode = %o", information.Mode().Perm())
 	}
 }

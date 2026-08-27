@@ -77,7 +77,7 @@ func (manager Manager) Install(ctx context.Context, definition Definition) (Insp
 	}
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
-	if _, err := temporary.Write(contents); err != nil {
+	if _, err := temporary.Write(utf16LEWithBOM(contents)); err != nil {
 		_ = temporary.Close()
 		return Inspection{}, fmt.Errorf("write temporary task definition: %w", err)
 	}
@@ -175,7 +175,7 @@ func (manager Manager) renderTask(ctx context.Context, definition Definition) ([
 	if err != nil {
 		return nil, err
 	}
-	contents := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+	contents := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Source>%s</Source>
@@ -215,6 +215,19 @@ func (manager Manager) renderTask(ctx context.Context, definition Definition) ([
 </Task>
 `, managedTaskSource, identifier, definition.LocalTime, userID, executable)
 	return []byte(contents), nil
+}
+
+// schtasks /Create /XML only accepts UTF-16 input; a UTF-8 file fails with
+// "unable to switch the encoding" even when the declaration says UTF-8.
+func utf16LEWithBOM(contents []byte) []byte {
+	units := utf16.Encode([]rune(string(contents)))
+	result := make([]byte, 2+len(units)*2)
+	result[0] = 0xff
+	result[1] = 0xfe
+	for index, unit := range units {
+		binary.LittleEndian.PutUint16(result[2+index*2:], unit)
+	}
+	return result
 }
 
 func (manager Manager) queryTask(ctx context.Context) ([]byte, bool, error) {
