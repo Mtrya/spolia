@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Mtrya/llmloot/internal/config"
+	"github.com/Mtrya/llmloot/internal/schedule"
 	"github.com/Mtrya/llmloot/internal/state"
 	"github.com/Mtrya/llmloot/internal/target/kimicode"
 )
@@ -158,11 +159,7 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 			}
 		}
 	}
-	if configuration.Schedule.Enabled {
-		result.Checks = append(result.Checks, doctorCheck{Name: "scheduler", Status: "not_checked", Detail: "native scheduling is not managed by this build"})
-	} else {
-		result.addOK("scheduler", "scheduling is disabled")
-	}
+	checkScheduler(ctx, configuration, currentState, stateErr == nil && stateExists, &result)
 	if stateErr == nil && stateExists {
 		jobNames := make([]string, 0, len(currentState.Jobs))
 		for jobName := range currentState.Jobs {
@@ -179,6 +176,54 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 		}
 	}
 	return writeDoctor(stdout, stderr, options.json, result)
+}
+
+func checkScheduler(ctx context.Context, configuration config.Config, currentState state.State, stateHealthy bool, result *doctorResult) {
+	if !stateHealthy {
+		return
+	}
+	if currentState.Scheduler == nil {
+		if configuration.Schedule.Enabled {
+			result.addError("scheduler", "scheduling is enabled but scheduler ownership state is missing", "Run llmloot setup to install the native per-user schedule.")
+		} else {
+			result.addOK("scheduler", "scheduling is disabled")
+		}
+		return
+	}
+	_, inspection, err := inspectStoredScheduler(ctx, *currentState.Scheduler)
+	if err != nil {
+		result.addError("scheduler", err.Error(), "Correct the scheduler state or rerun llmloot setup on this platform.")
+		return
+	}
+	if !configuration.Schedule.Enabled {
+		if inspection.Installed {
+			result.addError("scheduler", "scheduling is disabled but the owned native schedule remains installed", "Run llmloot setup --no-schedule or llmloot uninstall.")
+		} else {
+			result.addError("scheduler", "scheduling is disabled but stale scheduler ownership state remains", "Run llmloot setup --no-schedule to clear it.")
+		}
+		return
+	}
+	desired, err := currentScheduleDefinition(configuration.Schedule.LocalTime)
+	if err != nil {
+		result.addError("scheduler", err.Error(), "Run llmloot setup from a stable executable path.")
+		return
+	}
+	switch {
+	case currentState.Scheduler.Identifier != schedule.DefaultIdentifier:
+		result.addError("scheduler", fmt.Sprintf("unexpected scheduler identifier %q", currentState.Scheduler.Identifier), "Run llmloot setup to restore the one supported scheduler identifier.")
+	case !inspection.Installed:
+		result.addError("scheduler", "the owned native schedule is not installed", "Run llmloot setup to install it.")
+	case !inspection.Managed:
+		result.addError("scheduler", "the native scheduler artifact is not owned by llmloot", "Move the conflicting artifact, then rerun llmloot setup.")
+	case !inspection.Matches:
+		result.addError("scheduler", inspection.Detail, "Restore the scheduler definition or rerun llmloot setup after reviewing the edit.")
+	case !inspection.Enabled:
+		result.addError("scheduler", inspection.Detail, "Run llmloot setup to enable the native schedule.")
+	case currentState.Scheduler.ExecutablePath != desired.Executable || currentState.Scheduler.LocalTime != desired.LocalTime:
+		result.addError("scheduler", "the installed schedule does not match the current executable path or configured time", "Run llmloot setup to update the native schedule.")
+	default:
+		result.addOK("scheduler", fmt.Sprintf("%s %s at %s", inspection.Kind, inspection.Status, currentState.Scheduler.LocalTime))
+	}
 }
 
 func (result *doctorResult) addOK(name, detail string) {

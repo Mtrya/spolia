@@ -11,6 +11,7 @@ import (
 
 	"github.com/Mtrya/llmloot/internal/app"
 	"github.com/Mtrya/llmloot/internal/config"
+	"github.com/Mtrya/llmloot/internal/schedule"
 	"github.com/Mtrya/llmloot/internal/state"
 	"github.com/Mtrya/llmloot/internal/target/kimicode"
 )
@@ -23,12 +24,13 @@ type uninstallOptions struct {
 }
 
 type uninstallResult struct {
-	SchemaVersion int            `json:"schema_version"`
-	Operation     string         `json:"operation"`
-	DryRun        bool           `json:"dry_run"`
-	Outcome       string         `json:"outcome"`
-	TargetPlan    app.TargetPlan `json:"target_plan"`
-	Artifacts     []string       `json:"artifacts"`
+	SchemaVersion int                  `json:"schema_version"`
+	Operation     string               `json:"operation"`
+	DryRun        bool                 `json:"dry_run"`
+	Outcome       string               `json:"outcome"`
+	TargetPlan    app.TargetPlan       `json:"target_plan"`
+	Scheduler     *schedule.Inspection `json:"scheduler,omitempty"`
+	Artifacts     []string             `json:"artifacts"`
 }
 
 func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Writer) (exitCode int) {
@@ -99,6 +101,20 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 	operation := app.SyncResult{}
 	attachTargetPlan(&operation, targetName, configuration.Targets[targetName].Adapter, plan)
 	result := uninstallResult{SchemaVersion: 1, Operation: "uninstall", DryRun: options.dryRun, Outcome: "success", TargetPlan: operation.TargetPlans[0], Artifacts: []string{configPath, config.StatePath(configPath)}}
+	var schedulerManager schedule.Manager
+	if currentState.Scheduler != nil {
+		var schedulerInspection schedule.Inspection
+		schedulerManager, schedulerInspection, err = inspectStoredScheduler(ctx, *currentState.Scheduler)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		result.Scheduler = &schedulerInspection
+		result.Artifacts = append(schedulerInspection.Artifacts, result.Artifacts...)
+		if schedulerInspection.Installed && (!schedulerInspection.Managed || !schedulerInspection.Matches) {
+			result.Outcome = "failure"
+		}
+	}
 	if len(plan.Conflicts) > 0 {
 		result.Outcome = "failure"
 	} else if err := plan.Validate(ctx, installation); err != nil {
@@ -130,6 +146,16 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 		}
 		if !confirmed {
 			fmt.Fprintln(stderr, "uninstall cancelled")
+			return 1
+		}
+	}
+	if result.Scheduler != nil {
+		if _, err := schedulerManager.Remove(ctx); err != nil {
+			result.Outcome = "failure"
+			if options.yes {
+				_ = writeUninstall(stdout, result, options.json)
+			}
+			fmt.Fprintln(stderr, err)
 			return 1
 		}
 	}
@@ -191,6 +217,11 @@ func writeUninstall(writer io.Writer, result uninstallResult, asJSON bool) error
 	}
 	for _, conflict := range result.TargetPlan.Conflicts {
 		if _, err := fmt.Fprintf(writer, "  conflict %s %s: %s\n", conflict.Kind, conflict.ID, conflict.Reason); err != nil {
+			return err
+		}
+	}
+	if result.Scheduler != nil {
+		if _, err := fmt.Fprintf(writer, "  scheduler %s %s\n", result.Scheduler.Identifier, result.Scheduler.Status); err != nil {
 			return err
 		}
 	}

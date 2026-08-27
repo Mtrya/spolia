@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Mtrya/llmloot/internal/app"
 	"github.com/Mtrya/llmloot/internal/config"
@@ -164,6 +165,10 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 		return 1
 	}
 	updateState(&currentState, result, targetName, targetPlan.Ownership)
+	if err := satisfyBoundaryAfterFullSuccess(&currentState, configuration, result.Outcome, "", time.Now()); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
 	if err := state.Save(config.StatePath(configPath), currentState); err != nil {
 		result.Outcome = "failure"
 		result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(err))
@@ -180,6 +185,28 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 			_ = writeSetupResult(stdout, result, options.json)
 		}
 		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	inspection, err := reconcileConfiguredScheduler(ctx, config.StatePath(configPath), configuration, &currentState)
+	result.Schedule = &app.SchedulePlan{
+		Enabled:    configuration.Schedule.Enabled,
+		Kind:       inspection.Kind,
+		Identifier: inspection.Identifier,
+		LocalTime:  configuration.Schedule.LocalTime,
+		Status:     inspection.Status,
+		Artifacts:  inspection.Artifacts,
+	}
+	if currentState.Scheduler != nil {
+		result.Schedule.Executable = currentState.Scheduler.ExecutablePath
+	}
+	if err != nil {
+		result.Outcome = "failure"
+		result.Schedule.Status = "error"
+		result.Schedule.Error = compactError(err.Error())
+		if options.yes {
+			_ = writeSetupResult(stdout, result, options.json)
+		}
+		fmt.Fprintln(stderr, compactError(err.Error()))
 		return 1
 	}
 	if options.yes {

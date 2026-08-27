@@ -141,10 +141,9 @@ func (configuration Config) Validate() error {
 	if len(configuration.Jobs) == 0 {
 		return errors.New("config has no jobs")
 	}
-	if configuration.Schedule.Enabled {
-		if _, err := time.Parse("15:04", configuration.Schedule.LocalTime); err != nil {
-			return fmt.Errorf("schedule local_time %q must use 24-hour HH:MM format", configuration.Schedule.LocalTime)
-		}
+	parsed, err := time.Parse("15:04", configuration.Schedule.LocalTime)
+	if err != nil || parsed.Format("15:04") != configuration.Schedule.LocalTime {
+		return fmt.Errorf("schedule local_time %q must use 24-hour HH:MM format", configuration.Schedule.LocalTime)
 	}
 
 	priorities := make(map[string]bool, len(configuration.SourcePriority))
@@ -244,6 +243,9 @@ type NamedJob struct {
 }
 
 func applyDefaults(configuration *Config) {
+	if configuration.Schedule.LocalTime == "" {
+		configuration.Schedule.LocalTime = "09:00"
+	}
 	for name, job := range configuration.Jobs {
 		if job.Limit == 0 {
 			job.Limit = 3

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestMissingStateIsAnEmptyValidState(t *testing.T) {
@@ -23,6 +24,9 @@ func TestSaveRoundTripsOwnershipWithoutCredentialMaterial(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	current := New()
 	current.LLMlootVersion = "test"
+	boundary := time.Date(2026, 8, 27, 1, 0, 0, 0, time.UTC)
+	current.SatisfyScheduleBoundary(boundary)
+	current.Scheduler = &SchedulerState{Kind: "systemd", Identifier: "io.github.mtrya.llmloot", ExecutablePath: "/isolated/llmloot", LocalTime: "09:00", LastStatus: "enabled"}
 	current.Targets["kimi-code"] = TargetState{
 		Path: "/isolated/config.toml",
 		Providers: map[string]ProviderOwnership{
@@ -48,6 +52,9 @@ func TestSaveRoundTripsOwnershipWithoutCredentialMaterial(t *testing.T) {
 	}
 	if loaded.Targets["kimi-code"].Models["stealth/example"].Job != "openrouter-kimi-code" {
 		t.Fatalf("loaded state = %#v", loaded)
+	}
+	if loaded.LastSuccessfulScheduleBoundary == nil || !loaded.LastSuccessfulScheduleBoundary.Equal(boundary) || loaded.Scheduler == nil || loaded.Scheduler.Kind != "systemd" {
+		t.Fatalf("schedule state = %#v / %#v", loaded.LastSuccessfulScheduleBoundary, loaded.Scheduler)
 	}
 }
 

@@ -15,11 +15,13 @@ import (
 const SchemaVersion = 1
 
 type State struct {
-	SchemaVersion  int                    `json:"schema_version"`
-	LLMlootVersion string                 `json:"llmloot_version,omitempty"`
-	Sources        map[string]SourceState `json:"sources,omitempty"`
-	Jobs           map[string]JobState    `json:"jobs,omitempty"`
-	Targets        map[string]TargetState `json:"targets,omitempty"`
+	SchemaVersion                  int                    `json:"schema_version"`
+	LLMlootVersion                 string                 `json:"llmloot_version,omitempty"`
+	Sources                        map[string]SourceState `json:"sources,omitempty"`
+	Jobs                           map[string]JobState    `json:"jobs,omitempty"`
+	Targets                        map[string]TargetState `json:"targets,omitempty"`
+	LastSuccessfulScheduleBoundary *time.Time             `json:"last_successful_schedule_boundary,omitempty"`
+	Scheduler                      *SchedulerState        `json:"scheduler,omitempty"`
 }
 
 type SourceState struct {
@@ -48,6 +50,14 @@ type ModelOwnership struct {
 	Source string            `json:"source"`
 	Job    string            `json:"job"`
 	Fields map[string]string `json:"fields"`
+}
+
+type SchedulerState struct {
+	Kind           string `json:"kind"`
+	Identifier     string `json:"identifier"`
+	ExecutablePath string `json:"executable_path"`
+	LocalTime      string `json:"local_time"`
+	LastStatus     string `json:"last_status"`
 }
 
 func Load(path string) (State, error) {
@@ -134,6 +144,11 @@ func (state *State) RecordJob(name, outcome string, selectedIDs []string, compac
 		jobState.LastSuccess = &attemptedAt
 	}
 	state.Jobs[name] = jobState
+}
+
+func (state *State) SatisfyScheduleBoundary(boundary time.Time) {
+	boundary = boundary.UTC()
+	state.LastSuccessfulScheduleBoundary = &boundary
 }
 
 func Save(path string, current State) error {

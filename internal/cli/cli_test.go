@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/Mtrya/llmloot/internal/config"
@@ -56,5 +58,13 @@ func TestSyncOptionsRejectUnknownAndMultipleJobs(t *testing.T) {
 	}
 	if _, err := parseSyncOptions([]string{"one", "two"}); err == nil {
 		t.Fatal("multiple jobs were accepted")
+	}
+}
+
+func TestIfDueRejectsSingleJobAtTheCommandBoundary(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr strings.Builder
+	if exitCode := Run(context.Background(), []string{"sync", "openrouter-kimi-code", "--if-due"}, &stdout, &stderr); exitCode != 2 {
+		t.Fatalf("exit code = %d, stderr = %s", exitCode, stderr.String())
 	}
 }

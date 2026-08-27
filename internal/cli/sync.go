@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/Mtrya/llmloot/internal/app"
 	"github.com/Mtrya/llmloot/internal/config"
 	"github.com/Mtrya/llmloot/internal/output"
+	"github.com/Mtrya/llmloot/internal/schedule"
 	"github.com/Mtrya/llmloot/internal/state"
 	"github.com/Mtrya/llmloot/internal/target/kimicode"
 )
@@ -37,9 +39,9 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 		fmt.Fprintln(stderr, "--quiet and --json are mutually exclusive")
 		return 2
 	}
-	if options.ifDue {
-		fmt.Fprintln(stderr, "native scheduling is not available yet")
-		return 1
+	if options.ifDue && options.job != "" {
+		fmt.Fprintln(stderr, "--if-due cannot be used with a single job")
+		return 2
 	}
 
 	configPath, err := config.Path()
@@ -62,6 +64,25 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
+	if options.ifDue {
+		preflightState, exists, readErr := state.Read(config.StatePath(configPath))
+		if readErr != nil {
+			fmt.Fprintln(stderr, readErr)
+			return 1
+		}
+		if !exists {
+			fmt.Fprintln(stderr, "ownership state is missing; run llmloot setup before sync")
+			return 1
+		}
+		due, dueErr := syncIsDue(configuration, preflightState)
+		if dueErr != nil {
+			fmt.Fprintln(stderr, dueErr)
+			return 2
+		}
+		if !due {
+			return writeNotDue(stdout, stderr, options)
+		}
+	}
 	lock, err := state.AcquireLock(config.LockPath(configPath))
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -81,6 +102,16 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 	if !exists {
 		fmt.Fprintln(stderr, "ownership state is missing; run llmloot setup before sync")
 		return 1
+	}
+	if options.ifDue {
+		due, dueErr := syncIsDue(configuration, currentState)
+		if dueErr != nil {
+			fmt.Fprintln(stderr, dueErr)
+			return 2
+		}
+		if !due {
+			return writeNotDue(stdout, stderr, options)
+		}
 	}
 	installation, err := kimicode.Discover(ctx)
 	if err != nil {
@@ -115,6 +146,10 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 	}
 	if !options.dryRun && len(targetPlan.Conflicts) == 0 && err == nil {
 		updateState(&currentState, result, targetName, targetPlan.Ownership)
+		if boundaryErr := satisfyBoundaryAfterFullSuccess(&currentState, configuration, result.Outcome, options.job, time.Now()); boundaryErr != nil {
+			fmt.Fprintln(stderr, boundaryErr)
+			return 1
+		}
 		if saveErr := state.Save(config.StatePath(configPath), currentState); saveErr != nil {
 			fmt.Fprintln(stderr, saveErr)
 			return 1
@@ -135,6 +170,32 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 		return 0
 	}
 	return 1
+}
+
+func syncIsDue(configuration config.Config, currentState state.State) (bool, error) {
+	if !configuration.Schedule.Enabled {
+		return false, nil
+	}
+	due, _, err := schedule.IsDue(time.Now().In(time.Local), configuration.Schedule.LocalTime, currentState.LastSuccessfulScheduleBoundary)
+	return due, err
+}
+
+func writeNotDue(stdout, stderr io.Writer, options syncOptions) int {
+	if options.quiet {
+		return 0
+	}
+	result := app.SyncResult{SchemaVersion: app.ResultSchemaVersion, Operation: "sync", Outcome: "not_due", Jobs: []app.JobResult{}, TargetPlans: []app.TargetPlan{}}
+	var err error
+	if options.json {
+		err = output.JSON(stdout, result)
+	} else {
+		err = output.Human(stdout, result)
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
 }
 
 func appTargetError(err error) app.TargetConflict {

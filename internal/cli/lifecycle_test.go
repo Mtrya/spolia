@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Mtrya/llmloot/internal/config"
+	"github.com/Mtrya/llmloot/internal/schedule"
 	"github.com/Mtrya/llmloot/internal/state"
 	"github.com/Mtrya/llmloot/internal/target/kimicode"
 )
@@ -28,6 +30,70 @@ func TestSyncStopsWhenOwnershipStateIsMissing(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "ownership state is missing") {
 		t.Fatalf("stderr = %s", stderr.String())
+	}
+}
+
+func TestSyncIfDueStopsBeforeDiscoveryWhenBoundaryIsSatisfied(t *testing.T) {
+	llmlootHome := t.TempDir()
+	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	configuration := config.Default()
+	configPath := filepath.Join(llmlootHome, "config.toml")
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	currentState := state.New()
+	boundary, err := schedule.CurrentBoundary(time.Now().In(time.Local), configuration.Schedule.LocalTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentState.SatisfyScheduleBoundary(boundary)
+	if err := state.Save(filepath.Join(llmlootHome, "state.json"), currentState); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := state.AcquireLock(config.LockPath(configPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := lock.Release(); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	var stdout, stderr bytes.Buffer
+	if exitCode := Run(context.Background(), []string{"sync", "--if-due", "--json"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("exit code = %d, stderr = %s", exitCode, stderr.String())
+	}
+	var result struct {
+		Outcome     string            `json:"outcome"`
+		Jobs        []json.RawMessage `json:"jobs"`
+		TargetPlans []json.RawMessage `json:"target_plans"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != "not_due" || len(result.Jobs) != 0 || len(result.TargetPlans) != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestSyncIfDueIsAQuietNoOpWhenSchedulingIsDisabled(t *testing.T) {
+	llmlootHome := t.TempDir()
+	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	configuration := config.Default()
+	configuration.Schedule.Enabled = false
+	if err := config.Save(filepath.Join(llmlootHome, "config.toml"), configuration); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.Save(filepath.Join(llmlootHome, "state.json"), state.New()); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if exitCode := Run(context.Background(), []string{"sync", "--if-due", "--quiet"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("exit code = %d, stderr = %s", exitCode, stderr.String())
+	}
+	if stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
 

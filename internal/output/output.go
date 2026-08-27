@@ -78,5 +78,15 @@ func Human(writer io.Writer, result app.SyncResult) error {
 			}
 		}
 	}
+	if result.Schedule != nil {
+		if _, err := fmt.Fprintf(writer, "scheduler %s: %s\n", result.Schedule.Identifier, result.Schedule.Status); err != nil {
+			return err
+		}
+		if result.Schedule.Error != "" {
+			if _, err := fmt.Fprintf(writer, "  error: %s\n", result.Schedule.Error); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }

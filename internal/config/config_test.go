@@ -53,6 +53,9 @@ func TestDecodeAppliesJobDefaultsAndPriority(t *testing.T) {
 	if job.Limit != 3 || job.MinContext != 131072 {
 		t.Fatalf("defaults = limit %d, context %d", job.Limit, job.MinContext)
 	}
+	if configuration.Schedule.LocalTime != "09:00" {
+		t.Fatalf("schedule default = %q", configuration.Schedule.LocalTime)
+	}
 	jobs, err := configuration.EnabledJobs("")
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +84,15 @@ func TestDefaultConfigurationSavesAndLoads(t *testing.T) {
 	}
 	if information.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("config mode = %o", information.Mode().Perm())
+	}
+}
+
+func TestScheduleTimeRequiresCanonicalHourAndMinute(t *testing.T) {
+	t.Parallel()
+	configuration := Default()
+	configuration.Schedule.LocalTime = "9:00"
+	if err := configuration.Validate(); err == nil {
+		t.Fatal("non-canonical schedule time was accepted")
 	}
 }
 

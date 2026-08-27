@@ -38,8 +38,20 @@ type SyncResult struct {
 	Jobs          []JobResult         `json:"jobs"`
 	Collisions    []Collision         `json:"collisions,omitempty"`
 	TargetPlans   []TargetPlan        `json:"target_plans"`
+	Schedule      *SchedulePlan       `json:"schedule,omitempty"`
 	Observed      map[string][]string `json:"-"`
 	AttemptedAt   time.Time           `json:"-"`
+}
+
+type SchedulePlan struct {
+	Enabled    bool     `json:"enabled"`
+	Kind       string   `json:"kind"`
+	Identifier string   `json:"identifier"`
+	Executable string   `json:"executable,omitempty"`
+	LocalTime  string   `json:"local_time,omitempty"`
+	Status     string   `json:"status"`
+	Artifacts  []string `json:"artifacts,omitempty"`
+	Error      string   `json:"error,omitempty"`
 }
 
 type JobResult struct {

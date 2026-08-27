@@ -38,6 +38,10 @@ export ZENMUX_API_KEY=...
 
 Interactive setup asks one question at a time and shows the target plan before confirmation. `setup --yes` uses the existing configuration or stealth-only defaults; it never implicitly enables ordinary free or discounted paid models. `--yes` also never substitutes for a missing credential.
 
+Daily native scheduling is enabled by default at 09:00 local time. Setup performs an immediate sync, then installs one per-user systemd timer on Linux, LaunchAgent on macOS, or Task Scheduler task on Windows. Native catch-up behavior may invoke llmloot after a missed time, while `sync --if-due` ensures repeated wake or logon events do not repeat an already satisfied boundary. Use `setup --no-schedule` to opt out or remove an existing llmloot schedule.
+
+Scheduled execution uses the standard per-user configuration directory because Task Scheduler cannot portably preserve a process-local `LLMLOOT_HOME` override while keeping direct argument-safe execution. Use `--no-schedule` when testing with `LLMLOOT_HOME`.
+
 During setup, llmloot adopts a compatible existing Kimi Code provider or copies the corresponding environment credential into a new provider entry in Kimi Code's normal `config.toml`. Later syncs authenticate catalog discovery with that same provider credential. Environment variables are setup bootstrap inputs, not a second runtime credential source. llmloot's own config, state, output, and diagnostics never contain provider keys.
 
 Each sync preserves unrelated Kimi Code content, validates the proposed config with the real `kimi doctor config` command, checks that the file did not change after planning, and atomically replaces it. A source failure preserves that job's previous managed aliases while successful jobs can still reconcile. A valid zero-candidate result removes only unreferenced llmloot-owned aliases. Aliases referenced by `default_model` or `secondary_model.model` are retained and reported.

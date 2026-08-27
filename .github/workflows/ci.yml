@@ -21,7 +21,17 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
+      - name: Prepare Linux user scheduler
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          current_uid="$(id -u)"
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@${current_uid}.service"
+          echo "XDG_RUNTIME_DIR=/run/user/${current_uid}" >> "$GITHUB_ENV"
       - run: go test ./...
+        env:
+          LLMLOOT_NATIVE_SCHEDULE_TEST: "1"
       - run: go vet ./...
       - run: go build ./cmd/llmloot
 
