@@ -22,6 +22,16 @@ irm https://raw.githubusercontent.com/Mtrya/llmloot/main/install.ps1 | iex
 
 The scripts resolve the latest GitHub release, download the archive and `SHA256SUMS`, abort on a checksum mismatch, and install without elevation. The default destination is `~/.local/bin` on Linux/macOS and `%LOCALAPPDATA%\Programs\llmloot\bin` on Windows. Each script prints PATH guidance when its destination is not already available.
 
+The install command above always tracks the latest release. To pin a specific version, set `LLMLOOT_INSTALL_VERSION`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Mtrya/llmloot/main/install.sh | LLMLOOT_INSTALL_VERSION=0.1.0 bash
+```
+
+```powershell
+$env:LLMLOOT_INSTALL_VERSION = "0.1.0"; irm https://raw.githubusercontent.com/Mtrya/llmloot/main/install.ps1 | iex
+```
+
 You can also install from source with Go 1.26 or newer:
 
 ```sh

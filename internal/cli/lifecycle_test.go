@@ -192,6 +192,52 @@ func TestUninstallDryRunThenRemovalUsesOwnership(t *testing.T) {
 	}
 }
 
+func TestDoctorReportsAnExistingLockWithoutTouchingIt(t *testing.T) {
+	llmlootHome := t.TempDir()
+	kimiHome := t.TempDir()
+	installation := cliKimi(t, kimiHome)
+	t.Setenv("LLMLOOT_HOME", llmlootHome)
+	t.Setenv("KIMI_CODE_HOME", kimiHome)
+	configuration := localOnlyConfiguration()
+	configPath := filepath.Join(llmlootHome, "config.toml")
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installation.ConfigPath, []byte("# valid empty user config\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	currentState := state.New()
+	currentState.Targets["kimi-code"] = state.TargetState{Path: installation.ConfigPath}
+	if err := state.Save(filepath.Join(llmlootHome, "state.json"), currentState); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := config.LockPath(configPath)
+	if err := os.WriteFile(lockPath, []byte("999999\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if exitCode := Run(context.Background(), []string{"doctor", "--json"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("exit code = %d, stderr = %s, stdout = %s", exitCode, stderr.String(), stdout.String())
+	}
+	var result doctorResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, check := range result.Checks {
+		if check.Name == "process_lock" {
+			found = true
+			if check.Status != "warning" || check.Remediation == "" {
+				t.Fatalf("process_lock check = %#v", check)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no process_lock check in %#v", result.Checks)
+	}
+	assertFileBytes(t, lockPath, []byte("999999\n"))
+}
+
 func localOnlyConfiguration() config.Config {
 	configuration := config.Default()
 	configuration.Schedule.Enabled = false

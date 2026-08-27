@@ -141,7 +141,7 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 		}
 		if err != nil {
 			result.Outcome = "failure"
-			result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(err))
+			result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(targetName, err))
 		}
 	}
 	if !options.dryRun && len(targetPlan.Conflicts) == 0 && err == nil {
@@ -198,8 +198,8 @@ func writeNotDue(stdout, stderr io.Writer, options syncOptions) int {
 	return 0
 }
 
-func appTargetError(err error) app.TargetConflict {
-	return app.TargetConflict{Kind: "target", ID: "kimi-code", Reason: compactError(err.Error())}
+func appTargetError(targetName string, err error) app.TargetConflict {
+	return app.TargetConflict{Kind: "target", ID: targetName, Reason: compactError(err.Error())}
 }
 
 func parseSyncOptions(arguments []string) (syncOptions, error) {

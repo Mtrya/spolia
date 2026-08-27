@@ -77,3 +77,12 @@ Installers resolve the stable GitHub latest-release redirect, verify the chosen 
 A release candidate must pass formatting, tests, vet, race checks, native scheduler registration and cleanup, real Kimi Code configuration validation, reproducible packaging, per-platform artifact execution, and installer checksum-failure tests.
 
 Provider credentials are never placed in public CI. Before publication, an operator runs the two Linux live cells with isolated homes and real provider credentials. Each cell must select a model under its explicit policy and complete a harmless Kimi Code tool-use turn. Direct API requests and zero-candidate results do not satisfy that check.
+
+## Upstream contracts
+
+When an upstream contract changes, verify it against the current primary documentation and a real supported binary before changing behavior.
+
+- Kimi Code: [configuration reference](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/configuration/config-files.md), [data locations](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/configuration/data-locations.md), and [releases](https://github.com/MoonshotAI/kimi-code/releases). The supported harness is `MoonshotAI/kimi-code`; legacy `kimi-cli` is unsupported.
+- OpenRouter: [Models API](https://openrouter.ai/docs/api/api-reference/models/get-models), [model schema](https://openrouter.ai/docs/guides/overview/models), the [stealth provider](https://openrouter.ai/provider/stealth) and [OpenRouter model family](https://openrouter.ai/openrouter) pages, and [provider discount metadata](https://openrouter.ai/docs/guides/community/for-providers).
+- ZenMux: [Models API](https://zenmux.ai/docs/api/openai/openai-list-models.html), [pricing and fees](https://zenmux.ai/docs/about/pricing-and-cost), and [tool calling](https://zenmux.ai/docs/guide/advanced/tool-calls.html). Website badges and filters never feed selection.
+- Scheduling: [systemd timers](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html), [Apple scheduled jobs](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html), and [Windows Task Scheduler triggers](https://learn.microsoft.com/en-us/windows/win32/taskschd/trigger-types) with [`StartWhenAvailable`](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-startwhenavailable-settingstype-element).

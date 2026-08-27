@@ -119,7 +119,7 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 		result.Outcome = "failure"
 	} else if err := plan.Validate(ctx, installation); err != nil {
 		result.Outcome = "failure"
-		result.TargetPlan.Conflicts = append(result.TargetPlan.Conflicts, appTargetError(err))
+		result.TargetPlan.Conflicts = append(result.TargetPlan.Conflicts, appTargetError(targetName, err))
 	}
 	if result.Outcome != "success" {
 		if err := writeUninstall(stdout, result, options.json); err != nil {
@@ -161,7 +161,7 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 	}
 	if err := plan.Apply(ctx, installation); err != nil {
 		result.Outcome = "failure"
-		result.TargetPlan.Conflicts = append(result.TargetPlan.Conflicts, appTargetError(err))
+		result.TargetPlan.Conflicts = append(result.TargetPlan.Conflicts, appTargetError(targetName, err))
 		if options.yes {
 			_ = writeUninstall(stdout, result, options.json)
 		}

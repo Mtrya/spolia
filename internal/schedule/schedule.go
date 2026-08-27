@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const DefaultIdentifier = "io.github.mtrya.llmloot"
@@ -109,9 +110,12 @@ func commandArguments() []string {
 }
 
 func systemdQuote(value string) (string, error) {
+	// strconv.Quote escapes \" and \\ in a form systemd understands, but emits
+	// Go-only escapes (\t, \xNN, \uNNNN) for non-printable runes. Reject those
+	// instead of silently writing a unit systemd would misparse.
 	for _, character := range value {
-		if character == 0 || character == '\n' || character == '\r' {
-			return "", errors.New("scheduler executable contains an unsupported control character")
+		if !unicode.IsPrint(character) {
+			return "", fmt.Errorf("scheduler executable %q contains a character systemd cannot portably represent", value)
 		}
 	}
 	value = strings.ReplaceAll(value, "%", "%%")

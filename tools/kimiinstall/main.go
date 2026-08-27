@@ -22,9 +22,13 @@ import (
 
 const repositoryAPI = "https://api.github.com/repos/MoonshotAI/kimi-code/releases"
 
+const releaseTagPrefix = "@moonshot-ai/kimi-code@"
+
 type release struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
+	TagName    string `json:"tag_name"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+	Assets     []struct {
 		Name string `json:"name"`
 		URL  string `json:"browser_download_url"`
 	} `json:"assets"`
@@ -79,23 +83,10 @@ func install(ctx context.Context, version, binDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	releaseURL := repositoryAPI + "/latest"
-	if version != "latest" {
-		version = strings.TrimPrefix(version, "v")
-		if version == "" || strings.ContainsAny(version, "/\\ \t\r\n") {
-			return "", fmt.Errorf("invalid Kimi Code version %q", version)
-		}
-		tag := "@moonshot-ai/kimi-code@" + version
-		releaseURL = repositoryAPI + "/tags/" + url.PathEscape(tag)
-	}
 	client := &http.Client{Timeout: 8 * time.Minute}
-	contents, err := download(ctx, client, releaseURL, true)
+	current, err := resolveRelease(ctx, client, version, asset)
 	if err != nil {
 		return "", err
-	}
-	var current release
-	if err := json.Unmarshal(contents, &current); err != nil {
-		return "", fmt.Errorf("decode Kimi Code release: %w", err)
 	}
 	assetURL := findAsset(current, asset)
 	checksumURL := findAsset(current, asset+".sha256")
@@ -122,7 +113,50 @@ func install(ctx context.Context, version, binDir string) (string, error) {
 	if err := extractKimi(archive, binDir); err != nil {
 		return "", err
 	}
-	return strings.TrimPrefix(current.TagName, "@moonshot-ai/kimi-code@"), nil
+	return strings.TrimPrefix(current.TagName, releaseTagPrefix), nil
+}
+
+func resolveRelease(ctx context.Context, client *http.Client, version, asset string) (release, error) {
+	if version != "latest" {
+		version = strings.TrimPrefix(version, "v")
+		if version == "" || strings.ContainsAny(version, "/\\ \t\r\n") {
+			return release{}, fmt.Errorf("invalid Kimi Code version %q", version)
+		}
+		contents, err := download(ctx, client, repositoryAPI+"/tags/"+url.PathEscape(releaseTagPrefix+version), true)
+		if err != nil {
+			return release{}, err
+		}
+		var pinned release
+		if err := json.Unmarshal(contents, &pinned); err != nil {
+			return release{}, fmt.Errorf("decode Kimi Code release: %w", err)
+		}
+		return pinned, nil
+	}
+	// The repository releases several components, so /releases/latest may point
+	// at a tag without Kimi Code binaries. Walk recent releases instead and take
+	// the newest stable Kimi Code tag that carries the verified asset pair.
+	contents, err := download(ctx, client, repositoryAPI+"?per_page=30", true)
+	if err != nil {
+		return release{}, err
+	}
+	var recent []release
+	if err := json.Unmarshal(contents, &recent); err != nil {
+		return release{}, fmt.Errorf("decode Kimi Code releases: %w", err)
+	}
+	return selectLatestRelease(recent, asset)
+}
+
+func selectLatestRelease(recent []release, asset string) (release, error) {
+	for _, candidate := range recent {
+		if candidate.Draft || candidate.Prerelease || !strings.HasPrefix(candidate.TagName, releaseTagPrefix) {
+			continue
+		}
+		if findAsset(candidate, asset) == "" || findAsset(candidate, asset+".sha256") == "" {
+			continue
+		}
+		return candidate, nil
+	}
+	return release{}, fmt.Errorf("no recent Kimi Code release has a verified %s asset", asset)
 }
 
 func platformAsset(goos, goarch string) (string, error) {

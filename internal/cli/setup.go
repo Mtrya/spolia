@@ -131,7 +131,7 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 	if len(targetPlan.Conflicts) == 0 && result.Outcome != "failure" {
 		if err := targetPlan.Validate(ctx, installation); err != nil {
 			result.Outcome = "failure"
-			result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(err))
+			result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(targetName, err))
 		}
 	}
 	if result.Outcome == "failure" || len(targetPlan.Conflicts) > 0 {
@@ -157,7 +157,7 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 	}
 	if err := targetPlan.Apply(ctx, installation); err != nil {
 		result.Outcome = "failure"
-		result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(err))
+		result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(targetName, err))
 		if options.yes {
 			_ = writeSetupResult(stdout, result, options.json)
 		}
@@ -171,7 +171,7 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 	}
 	if err := state.Save(config.StatePath(configPath), currentState); err != nil {
 		result.Outcome = "failure"
-		result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(err))
+		result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(targetName, err))
 		if options.yes {
 			_ = writeSetupResult(stdout, result, options.json)
 		}
@@ -180,7 +180,7 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 	}
 	if err := config.Save(configPath, configuration); err != nil {
 		result.Outcome = "failure"
-		result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(err))
+		result.TargetPlans[0].Conflicts = append(result.TargetPlans[0].Conflicts, appTargetError(targetName, err))
 		if options.yes {
 			_ = writeSetupResult(stdout, result, options.json)
 		}

@@ -140,6 +140,8 @@ func (manager Manager) Remove(ctx context.Context) (bool, error) {
 }
 
 func (manager Manager) renderLaunchAgent(definition Definition) ([]byte, error) {
+	// RunAtLoad also fires on login and re-bootstrap, not only after a missed
+	// schedule; the --if-due invocation keeps those extra wake-ups idle.
 	hour, minute, err := ParseLocalTime(definition.LocalTime)
 	if err != nil {
 		return nil, err

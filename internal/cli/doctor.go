@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -70,6 +71,14 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 		result.addError("ownership_state", "ownership state is missing", "Run llmloot setup before sync or target cleanup.")
 	} else {
 		result.addOK("ownership_state", "ownership state is valid")
+	}
+	lockPath := config.LockPath(configPath)
+	if _, lockErr := os.Stat(lockPath); lockErr == nil {
+		result.Checks = append(result.Checks, doctorCheck{Name: "process_lock", Status: "warning", Detail: "a lock file exists at " + lockPath, Remediation: "If no llmloot process is running, remove the stale lock file."})
+	} else if errors.Is(lockErr, os.ErrNotExist) {
+		result.addOK("process_lock", "no process lock is held")
+	} else {
+		result.addError("process_lock", lockErr.Error(), "Check the llmloot home directory permissions.")
 	}
 	installation, installationErr := kimicode.Discover(ctx)
 	if installationErr != nil {
