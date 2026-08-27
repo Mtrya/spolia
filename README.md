@@ -88,7 +88,7 @@ go test -race ./...
 go vet ./...
 ```
 
-The Linux live check uses isolated Kimi Code and llmloot homes, runs setup and sync, invokes the selected model through the real Kimi Code binary, requires a harmless shell-tool turn, and emits a redacted JSON report:
+The Linux live check uses isolated Kimi Code and llmloot homes, runs setup and sync, activates the selected alias only inside the disposable Kimi Code home, invokes it through the real Kimi Code binary, requires a harmless shell-tool turn, and emits a redacted JSON report. It never changes the operator's Kimi Code configuration:
 
 ```sh
 go build -o /tmp/llmloot-livecheck ./cmd/llmloot

@@ -1,8 +1,12 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 func TestLivePoliciesRequireExplicitWideningAndCeilings(t *testing.T) {
@@ -47,5 +51,35 @@ func TestLiveErrorRedactionRemovesCredentialAndWorkspace(t *testing.T) {
 	message := redact("request provider-secret failed in /tmp/private-livecheck/config.toml")
 	if strings.Contains(message, "provider-secret") || strings.Contains(message, "/tmp/private-livecheck") {
 		t.Fatalf("redacted message = %q", message)
+	}
+}
+
+func TestActivateIsolatedKimiModel(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "config.toml")
+	contents := []byte("[models.\"provider/model\"]\nprovider = \"provider\"\nmodel = \"provider/model\"\n")
+	if err := os.WriteFile(path, contents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := activateIsolatedKimiModel(path, "provider/model"); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := toml.Unmarshal(updated, &document); err != nil {
+		t.Fatal(err)
+	}
+	if document["default_model"] != "provider/model" {
+		t.Fatalf("default_model = %#v", document["default_model"])
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o", info.Mode().Perm())
 	}
 }

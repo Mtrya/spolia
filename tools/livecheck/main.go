@@ -13,10 +13,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Mtrya/llmloot/internal/app"
+	"github.com/Mtrya/llmloot/internal/atomicfile"
 	"github.com/Mtrya/llmloot/internal/config"
 )
 
@@ -41,6 +43,7 @@ type cellReport struct {
 	Architecture     string            `json:"architecture"`
 	SetupOutcome     string            `json:"setup_outcome,omitempty"`
 	SyncOutcome      string            `json:"sync_outcome,omitempty"`
+	ModelActivation  string            `json:"model_activation,omitempty"`
 	ToolUseSuccess   bool              `json:"tool_use_success"`
 	Error            string            `json:"error,omitempty"`
 }
@@ -238,6 +241,11 @@ func runCell(sourceName string, policy policyFlags, llmloot, kimi, llmlootVersio
 	selected := syncResult.Jobs[0].Selected[0]
 	cell.SelectedModel = selected.ID
 	cell.EligibilityClass = string(selected.Class)
+	if err := activateIsolatedKimiModel(filepath.Join(kimiHome, "config.toml"), selected.ID); err != nil {
+		cell.Error = redact(err.Error())
+		return cell
+	}
+	cell.ModelActivation = "isolated_default"
 	prompt := "Use the Shell tool exactly once to run: printf llmloot-livecheck-tool-ok. After the tool succeeds, reply with a brief confirmation."
 	stream, err := runCommand(ctx, workspace, baseEnvironment, kimi, "-m", selected.ID, "-p", prompt, "--output-format", "stream-json", "--skills-dir", skills)
 	if err != nil {
@@ -258,6 +266,21 @@ func runCell(sourceName string, policy policyFlags, llmloot, kimi, llmlootVersio
 		cell.Error = "Kimi Code did not complete the required harmless tool-use turn"
 	}
 	return cell
+}
+
+// Kimi Code 0.38 and 0.39 bind -m to the session but check default_model at
+// their prompt readiness gate. The live check owns and deletes this isolated
+// home, so it activates the selected alias there without touching user config.
+func activateIsolatedKimiModel(path, alias string) error {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read isolated Kimi Code config: %w", err)
+	}
+	prefix := []byte("default_model = " + strconv.Quote(alias) + "\n\n")
+	if err := atomicfile.Write(path, append(prefix, contents...), 0o600); err != nil {
+		return fmt.Errorf("activate selected model in isolated Kimi Code config: %w", err)
+	}
+	return nil
 }
 
 func requestedSources(name string) ([]string, error) {
