@@ -103,6 +103,8 @@ go run ./tools/livecheck --llmloot /tmp/llmloot-livecheck --source all --openrou
 
 Discounted checks additionally require one or more source-specific ceiling flags such as `--openrouter-ceiling 'prompt|per_token|USD=0.000001'`.
 
+To retry a different candidate without changing policy, use one source and name an exact model that the sync selected, such as `--source zenmux --zenmux-policy free --model '<exact-selected-model-id>'`. The check rejects models outside that run's eligible selection.
+
 ## License
 
 llmloot is available under the [MIT License](LICENSE).

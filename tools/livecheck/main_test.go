@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Mtrya/llmloot/internal/app"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -81,5 +82,17 @@ func TestActivateIsolatedKimiModel(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("mode = %o", info.Mode().Perm())
+	}
+}
+
+func TestSelectLiveModelRequiresAnEligibleSelection(t *testing.T) {
+	t.Parallel()
+	selected := []app.SelectedModel{{ID: "first/model"}, {ID: "second/model"}}
+	model, err := selectLiveModel(selected, "second/model")
+	if err != nil || model.ID != "second/model" {
+		t.Fatalf("model = %#v, err = %v", model, err)
+	}
+	if _, err := selectLiveModel(selected, "unselected/model"); err == nil {
+		t.Fatal("unselected model was accepted")
 	}
 }

@@ -88,6 +88,7 @@ func (value *ceilingFlag) Set(text string) error {
 
 func main() {
 	sourceName := flag.String("source", "all", "cell to run: openrouter, zenmux, or all")
+	selectedModel := flag.String("model", "", "exact eligible model to validate; requires a single source")
 	llmlootFlag := flag.String("llmloot", "llmloot", "llmloot binary to validate")
 	kimiFlag := flag.String("kimi", "kimi", "Kimi Code binary to use")
 	openRouterPolicy := flag.String("openrouter-policy", "stealth", "openrouter policy: stealth, free, discounted, or free+discounted")
@@ -106,6 +107,9 @@ func main() {
 	sources, err := requestedSources(*sourceName)
 	if err != nil {
 		fatal(err)
+	}
+	if *selectedModel != "" && len(sources) != 1 {
+		fatal(errors.New("an exact model requires a single source"))
 	}
 	policies := map[string]policyFlags{
 		"openrouter": {name: *openRouterPolicy, ceilings: openRouterCeilings},
@@ -138,7 +142,7 @@ func main() {
 
 	result := report{SchemaVersion: reportSchemaVersion, GeneratedAt: time.Now().UTC(), Outcome: "pass", Cells: make([]cellReport, 0, len(sources))}
 	for _, source := range sources {
-		cell := runCell(source, policies[source], llmloot, kimi, llmlootVersion, kimiVersion)
+		cell := runCell(source, policies[source], *selectedModel, llmloot, kimi, llmlootVersion, kimiVersion)
 		if !cell.ToolUseSuccess {
 			result.Outcome = "fail"
 		}
@@ -155,7 +159,7 @@ func main() {
 	}
 }
 
-func runCell(sourceName string, policy policyFlags, llmloot, kimi, llmlootVersion, kimiVersion string) cellReport {
+func runCell(sourceName string, policy policyFlags, requestedModel, llmloot, kimi, llmlootVersion, kimiVersion string) cellReport {
 	cell := cellReport{
 		Source: sourceName, Policy: policy.name, PriceCeilings: cloneMap(policy.ceilings), LLMlootVersion: llmlootVersion,
 		KimiCodeVersion: kimiVersion, OS: runtime.GOOS, Architecture: runtime.GOARCH,
@@ -238,7 +242,11 @@ func runCell(sourceName string, policy policyFlags, llmloot, kimi, llmlootVersio
 		cell.Error = "no model was selected under the explicit policy"
 		return cell
 	}
-	selected := syncResult.Jobs[0].Selected[0]
+	selected, err := selectLiveModel(syncResult.Jobs[0].Selected, requestedModel)
+	if err != nil {
+		cell.Error = redact(err.Error())
+		return cell
+	}
 	cell.SelectedModel = selected.ID
 	cell.EligibilityClass = string(selected.Class)
 	if err := activateIsolatedKimiModel(filepath.Join(kimiHome, "config.toml"), selected.ID); err != nil {
@@ -266,6 +274,21 @@ func runCell(sourceName string, policy policyFlags, llmloot, kimi, llmlootVersio
 		cell.Error = "Kimi Code did not complete the required harmless tool-use turn"
 	}
 	return cell
+}
+
+func selectLiveModel(selected []app.SelectedModel, requested string) (app.SelectedModel, error) {
+	if len(selected) == 0 {
+		return app.SelectedModel{}, errors.New("no model was selected under the explicit policy")
+	}
+	if requested == "" {
+		return selected[0], nil
+	}
+	for _, candidate := range selected {
+		if candidate.ID == requested {
+			return candidate, nil
+		}
+	}
+	return app.SelectedModel{}, fmt.Errorf("requested model %q was not selected under the explicit policy", requested)
 }
 
 // Kimi Code 0.38 and 0.39 bind -m to the session but check default_model at
