@@ -70,6 +70,29 @@ func TestPlanIsolatesSourceFailureFromSuccessfulValidZero(t *testing.T) {
 	}
 }
 
+func TestRequestedLowerPriorityJobDoesNotDisplaceOwnedHigherPriorityAlias(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	configuration := twoSourceConfiguration()
+	jobs, err := configuration.EnabledJobs("zenmux-kimi-code")
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentState := state.New()
+	currentState.Targets["kimi-code"] = state.TargetState{Models: map[string]state.ModelOwnership{
+		"shared/model": {Source: "openrouter", Job: "openrouter-kimi-code"},
+	}}
+	result := plan(configuration, currentState, jobs, map[string]catalogResult{
+		"zenmux": {catalog: source.Catalog{Source: "zenmux", Models: []model.Candidate{selectableCandidate("zenmux", "shared/model", now)}}},
+	}, now, "zenmux-kimi-code")
+	if len(result.Collisions) != 1 || result.Collisions[0].KeptSource != "openrouter" {
+		t.Fatalf("collisions = %#v", result.Collisions)
+	}
+	if len(result.Jobs[0].Selected) != 0 || result.Jobs[0].Outcome != "zero_candidates" {
+		t.Fatalf("requested job = %#v", result.Jobs[0])
+	}
+}
+
 func twoSourceConfiguration() config.Config {
 	return config.Config{
 		SchemaVersion:  1,

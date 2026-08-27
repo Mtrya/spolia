@@ -163,6 +163,12 @@ func parseRecord(record json.RawMessage) (model.Candidate, error) {
 	}
 	if hasValue(raw.Reasoning) {
 		candidate.Capabilities["reasoning"] = true
+		var reasoning struct {
+			Mandatory bool `json:"mandatory"`
+		}
+		if source.DecodeJSON(raw.Reasoning, &reasoning) == nil && reasoning.Mandatory {
+			candidate.Capabilities["always_thinking"] = true
+		}
 	}
 	addModalityCapabilities(&candidate)
 	candidate.Prices, candidate.PriceErrors = parsePricing(raw.Pricing)

@@ -31,13 +31,15 @@ type catalogResult struct {
 }
 
 type SyncResult struct {
-	SchemaVersion int          `json:"schema_version"`
-	Operation     string       `json:"operation"`
-	DryRun        bool         `json:"dry_run"`
-	Outcome       string       `json:"outcome"`
-	Jobs          []JobResult  `json:"jobs"`
-	Collisions    []Collision  `json:"collisions,omitempty"`
-	TargetPlans   []TargetPlan `json:"target_plans"`
+	SchemaVersion int                 `json:"schema_version"`
+	Operation     string              `json:"operation"`
+	DryRun        bool                `json:"dry_run"`
+	Outcome       string              `json:"outcome"`
+	Jobs          []JobResult         `json:"jobs"`
+	Collisions    []Collision         `json:"collisions,omitempty"`
+	TargetPlans   []TargetPlan        `json:"target_plans"`
+	Observed      map[string][]string `json:"-"`
+	AttemptedAt   time.Time           `json:"-"`
 }
 
 type JobResult struct {
@@ -75,10 +77,31 @@ type Collision struct {
 }
 
 type TargetPlan struct {
-	Target  string        `json:"target"`
-	Adapter string        `json:"adapter"`
-	Write   bool          `json:"write"`
-	Models  []TargetModel `json:"models"`
+	Target    string           `json:"target"`
+	Adapter   string           `json:"adapter"`
+	Path      string           `json:"path,omitempty"`
+	Write     bool             `json:"write"`
+	Models    []TargetModel    `json:"models"`
+	Changes   []TargetChange   `json:"changes,omitempty"`
+	Conflicts []TargetConflict `json:"conflicts,omitempty"`
+	Protected []ProtectedModel `json:"protected,omitempty"`
+}
+
+type TargetChange struct {
+	Action string `json:"action"`
+	Kind   string `json:"kind"`
+	ID     string `json:"id"`
+}
+
+type TargetConflict struct {
+	Kind   string `json:"kind"`
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+type ProtectedModel struct {
+	ID         string   `json:"id"`
+	References []string `json:"references"`
 }
 
 type TargetModel struct {
@@ -88,7 +111,11 @@ type TargetModel struct {
 }
 
 func (application Application) DryRun(ctx context.Context, configuration config.Config, currentState state.State, requestedJob string) SyncResult {
-	result := SyncResult{SchemaVersion: ResultSchemaVersion, Operation: "sync", DryRun: true}
+	return application.Plan(ctx, configuration, currentState, requestedJob, true)
+}
+
+func (application Application) Plan(ctx context.Context, configuration config.Config, currentState state.State, requestedJob string, dryRun bool) SyncResult {
+	result := SyncResult{SchemaVersion: ResultSchemaVersion, Operation: "sync", DryRun: dryRun, Observed: make(map[string][]string)}
 	jobs, err := configuration.EnabledJobs(requestedJob)
 	if err != nil {
 		result.Outcome = "failure"
@@ -115,16 +142,26 @@ func (application Application) DryRun(ctx context.Context, configuration config.
 		}
 		catalog, err := adapter.Fetch(ctx, credential)
 		catalogs[job.Source] = catalogResult{catalog: catalog, err: err}
+		if err == nil {
+			for _, candidate := range catalog.Models {
+				result.Observed[job.Source] = append(result.Observed[job.Source], candidate.ID)
+			}
+			sort.Strings(result.Observed[job.Source])
+		}
 	}
 
 	now := time.Now().UTC()
 	if application.Now != nil {
 		now = application.Now().UTC()
 	}
-	return plan(configuration, currentState, jobs, catalogs, now)
+	planned := plan(configuration, currentState, jobs, catalogs, now, requestedJob)
+	planned.DryRun = dryRun
+	planned.Observed = result.Observed
+	planned.AttemptedAt = now
+	return planned
 }
 
-func plan(configuration config.Config, currentState state.State, jobs []config.NamedJob, catalogs map[string]catalogResult, now time.Time) SyncResult {
+func plan(configuration config.Config, currentState state.State, jobs []config.NamedJob, catalogs map[string]catalogResult, now time.Time, requestedJob ...string) SyncResult {
 	result := SyncResult{SchemaVersion: ResultSchemaVersion, Operation: "sync", DryRun: true}
 	for _, job := range jobs {
 		jobResult := JobResult{
@@ -149,6 +186,9 @@ func plan(configuration config.Config, currentState state.State, jobs []config.N
 		candidates := append([]model.Candidate(nil), fetched.catalog.Models...)
 		for index := range candidates {
 			candidates[index].FirstSeen = currentState.FirstSeen(job.Source, candidates[index].ID)
+			if candidates[index].FirstSeen.IsZero() {
+				candidates[index].FirstSeen = now
+			}
 		}
 		decisions := policy.Evaluate(candidates, policy.Options{Policy: job.Policy, MinContext: job.MinContext, Now: now})
 		for _, decision := range decisions {
@@ -164,6 +204,22 @@ func plan(configuration config.Config, currentState state.State, jobs []config.N
 	}
 
 	used := make(map[string]map[string]TargetModel)
+	if len(requestedJob) > 0 && requestedJob[0] != "" && len(jobs) == 1 {
+		priority := make(map[string]int, len(configuration.SourcePriority))
+		for index, sourceName := range configuration.SourcePriority {
+			priority[sourceName] = index
+		}
+		requested := jobs[0]
+		for alias, owned := range currentState.Targets[requested.Target].Models {
+			if owned.Job == requested.Name || priority[owned.Source] > priority[requested.Source] {
+				continue
+			}
+			if used[requested.Target] == nil {
+				used[requested.Target] = make(map[string]TargetModel)
+			}
+			used[requested.Target][alias] = TargetModel{ID: alias, Source: owned.Source, Job: owned.Job}
+		}
+	}
 	for index := range result.Jobs {
 		jobResult := &result.Jobs[index]
 		if jobResult.Outcome == "error" {

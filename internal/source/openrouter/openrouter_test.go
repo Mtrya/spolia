@@ -62,3 +62,15 @@ func TestMalformedCandidatePriceDoesNotBecomeSourceFailure(t *testing.T) {
 		t.Fatalf("parsed models = %#v", catalog.Models)
 	}
 }
+
+func TestMandatoryReasoningIsPreservedAsAnExplicitCapability(t *testing.T) {
+	t.Parallel()
+	contents := []byte(`{"data":[{"id":"example/reasoner","name":"Reasoner","created":1,"context_length":131072,"architecture":{"input_modalities":["text"],"output_modalities":["text"]},"pricing":{"prompt":"0","completion":"0"},"supported_parameters":["tools","reasoning"],"reasoning":{"mandatory":true}}]}`)
+	catalog, err := Parse(bytes.NewReader(contents), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !catalog.Models[0].Capabilities["reasoning"] || !catalog.Models[0].Capabilities["always_thinking"] {
+		t.Fatalf("capabilities = %#v", catalog.Models[0].Capabilities)
+	}
+}

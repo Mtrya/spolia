@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/Mtrya/llmloot/internal/atomicfile"
 	"github.com/Mtrya/llmloot/internal/model"
 	"github.com/pelletier/go-toml/v2"
 )
@@ -91,6 +93,37 @@ func StatePath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "state.json")
 }
 
+func Default() Config {
+	return Config{
+		SchemaVersion:  SchemaVersion,
+		SourcePriority: []string{"openrouter", "zenmux"},
+		Schedule:       Schedule{Enabled: true, LocalTime: "09:00"},
+		Sources: map[string]Source{
+			"openrouter": {Adapter: "openrouter", CredentialEnv: "OPENROUTER_API_KEY"},
+			"zenmux":     {Adapter: "zenmux", CredentialEnv: "ZENMUX_API_KEY"},
+		},
+		Targets: map[string]Target{"kimi-code": {Adapter: "kimi-code"}},
+		Jobs: map[string]Job{
+			"openrouter-kimi-code": {Enabled: true, Source: "openrouter", Target: "kimi-code", Limit: 3, MinContext: 131072, Policy: Policy{}},
+			"zenmux-kimi-code":     {Enabled: true, Source: "zenmux", Target: "kimi-code", Limit: 3, MinContext: 131072, Policy: Policy{}},
+		},
+	}
+}
+
+func Save(path string, configuration Config) error {
+	if err := configuration.Validate(); err != nil {
+		return err
+	}
+	contents, err := toml.Marshal(configuration)
+	if err != nil {
+		return fmt.Errorf("encode config: %w", err)
+	}
+	if err := atomicfile.Write(path, contents, 0o600); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	return nil
+}
+
 func LockPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "llmloot.lock")
 }
@@ -107,6 +140,11 @@ func (configuration Config) Validate() error {
 	}
 	if len(configuration.Jobs) == 0 {
 		return errors.New("config has no jobs")
+	}
+	if configuration.Schedule.Enabled {
+		if _, err := time.Parse("15:04", configuration.Schedule.LocalTime); err != nil {
+			return fmt.Errorf("schedule local_time %q must use 24-hour HH:MM format", configuration.Schedule.LocalTime)
+		}
 	}
 
 	priorities := make(map[string]bool, len(configuration.SourcePriority))

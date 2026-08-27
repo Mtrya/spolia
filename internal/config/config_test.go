@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -57,6 +59,28 @@ func TestDecodeAppliesJobDefaultsAndPriority(t *testing.T) {
 	}
 	if len(jobs) != 2 || jobs[0].Source != "openrouter" || jobs[1].Source != "zenmux" {
 		t.Fatalf("job order = %#v", jobs)
+	}
+}
+
+func TestDefaultConfigurationSavesAndLoads(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := Save(path, Default()); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Jobs["openrouter-kimi-code"].Policy.IncludeFree || loaded.Jobs["openrouter-kimi-code"].Policy.IncludeDiscounted {
+		t.Fatal("default configuration widened model eligibility")
+	}
+	information, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if information.Mode().Perm()&0o077 != 0 {
+		t.Fatalf("config mode = %o", information.Mode().Perm())
 	}
 }
 

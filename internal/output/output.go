@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/Mtrya/llmloot/internal/app"
 )
@@ -17,7 +18,11 @@ func JSON(writer io.Writer, result app.SyncResult) error {
 }
 
 func Human(writer io.Writer, result app.SyncResult) error {
-	if _, err := fmt.Fprintf(writer, "sync dry-run: %s\n", result.Outcome); err != nil {
+	operation := result.Operation
+	if result.DryRun {
+		operation += " dry-run"
+	}
+	if _, err := fmt.Fprintf(writer, "%s: %s\n", operation, result.Outcome); err != nil {
 		return err
 	}
 	for _, job := range result.Jobs {
@@ -49,6 +54,26 @@ func Human(writer io.Writer, result app.SyncResult) error {
 				}
 			}
 			if _, err := fmt.Fprintln(writer); err != nil {
+				return err
+			}
+		}
+	}
+	for _, targetPlan := range result.TargetPlans {
+		if _, err := fmt.Fprintf(writer, "target %s: write=%t\n", targetPlan.Target, targetPlan.Write); err != nil {
+			return err
+		}
+		for _, change := range targetPlan.Changes {
+			if _, err := fmt.Fprintf(writer, "  %s %s %s\n", change.Action, change.Kind, change.ID); err != nil {
+				return err
+			}
+		}
+		for _, protected := range targetPlan.Protected {
+			if _, err := fmt.Fprintf(writer, "  protected model %s (%s)\n", protected.ID, strings.Join(protected.References, ", ")); err != nil {
+				return err
+			}
+		}
+		for _, conflict := range targetPlan.Conflicts {
+			if _, err := fmt.Fprintf(writer, "  conflict %s %s: %s\n", conflict.Kind, conflict.ID, conflict.Reason); err != nil {
 				return err
 			}
 		}
