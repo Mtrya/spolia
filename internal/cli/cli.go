@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-const Version = "0.1.0-dev"
+var Version = "0.1.0-dev"
 
 func Run(ctx context.Context, arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 0 {

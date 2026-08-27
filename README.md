@@ -1,61 +1,108 @@
 # llmloot
 
-llmloot discovers temporary model opportunities from model aggregators, applies an explicit local eligibility policy, and reconciles selected models into an AI coding harness without changing its active or default model.
+llmloot discovers temporary model opportunities from OpenRouter and ZenMux, applies an explicit local cost policy, and reconciles eligible models into Kimi Code without changing its active or default model.
 
-The initial adapters support OpenRouter and ZenMux as sources and Kimi Code 0.38.0 or newer as the target. Model aliases remain exact upstream IDs, and a run never widens the configured policy when no candidate is available.
+The supported matrix is OpenRouter and ZenMux with Kimi Code 0.38.0 or newer on Linux, macOS, and Windows. Model aliases remain the exact upstream IDs. A run with no eligible model succeeds with zero candidates and never silently enables a broader policy.
+
+## Install
+
+Kimi Code must already be installed and available as `kimi` on `PATH`.
+
+Linux and macOS:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Mtrya/llmloot/main/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/Mtrya/llmloot/main/install.ps1 | iex
+```
+
+The scripts resolve the latest GitHub release, download the archive and `SHA256SUMS`, abort on a checksum mismatch, and install without elevation. The default destination is `~/.local/bin` on Linux/macOS and `%LOCALAPPDATA%\Programs\llmloot\bin` on Windows. Each script prints PATH guidance when its destination is not already available.
+
+You can also install from source with Go 1.26 or newer:
+
+```sh
+go install github.com/Mtrya/llmloot/cmd/llmloot@latest
+```
+
+## Set up
+
+Make one or both provider credentials available for the initial setup:
+
+```sh
+export OPENROUTER_API_KEY=...
+export ZENMUX_API_KEY=...
+llmloot setup
+```
+
+Interactive setup asks one question at a time, shows the target plan, performs an immediate sync, and enables one daily native per-user schedule by default. Use `llmloot setup --no-schedule` to opt out. `setup --yes` accepts the existing configuration or stealth-only defaults, but it never supplies a missing credential or enables ordinary free or discounted models.
+
+llmloot adopts a compatible Kimi Code provider or copies the bootstrap credential into Kimi Code's normal `config.toml`. Later discovery reuses that provider credential. llmloot's own configuration, state, output, and diagnostics do not store or print provider keys.
+
+Scheduling uses a systemd user timer on Linux, a LaunchAgent on macOS, or a per-user Task Scheduler task on Windows. Scheduled runs execute `llmloot sync --if-due --quiet`; they perform metadata discovery only and never start an inference turn. An `LLMLOOT_HOME` override is intended for isolated manual testing and cannot be combined with native scheduling.
 
 ## Policy
 
-Every job always considers free stealth models. Ordinary free and discounted paid models are independent, additive opt-ins:
+Every enabled job considers free stealth models. Ordinary free and discounted paid models are independent opt-ins:
 
 ```toml
+[jobs.openrouter-kimi-code.policy]
 include_free = false
 include_discounted = false
 ```
 
-Stealth models must also be free. Free means every published price is zero, with prompt and completion prices present. Discounted models require an authoritative machine-readable discount marker from the source and an explicit ceiling for every nonzero billing dimension. Effective price differences and website badges are not treated as discount evidence.
-
-Ceiling keys use `dimension|unit|currency`, matching the normalized prices shown by `sync --dry-run --json`. For example:
+Enabling `include_free` adds ordinary free models. Enabling `include_discounted` adds discounted models and requires an explicit decimal-string ceiling for every nonzero billing dimension:
 
 ```toml
+[jobs.openrouter-kimi-code.policy]
+include_free = false
 include_discounted = true
-price_ceilings = { "prompt|perMTokens|USD" = "1", "completion|perMTokens|USD" = "3" }
+price_ceilings = { "prompt|per_token|USD" = "0.000001", "completion|per_token|USD" = "0.000003" }
 ```
 
-## Build and run
+Ceiling keys use `dimension|unit|currency`, matching the normalized prices in `llmloot sync --dry-run --json`. A model is discounted only when the source exposes authoritative machine-readable discount evidence; llmloot does not infer discounts from website badges or comparisons.
 
-Go 1.26 or newer is required.
+See [config.example.toml](config.example.toml) for the complete two-source configuration.
 
-```sh
-go build -o llmloot ./cmd/llmloot
-export OPENROUTER_API_KEY=...
-export ZENMUX_API_KEY=...
-./llmloot setup --no-schedule
-./llmloot sync --dry-run --json
-./llmloot sync
-./llmloot doctor
+## Commands
+
+```text
+llmloot setup [--yes] [--no-schedule] [--json]
+llmloot sync [job] [--dry-run] [--if-due] [--quiet] [--json]
+llmloot doctor [--json]
+llmloot uninstall [--dry-run] [--yes] [--json]
 ```
 
-Interactive setup asks one question at a time and shows the target plan before confirmation. `setup --yes` uses the existing configuration or stealth-only defaults; it never implicitly enables ordinary free or discounted paid models. `--yes` also never substitutes for a missing credential.
+`sync --dry-run` performs real authenticated discovery, policy evaluation, target inspection, and Kimi Code validation without writing. A failed job preserves its previous managed models while unrelated jobs may still update. `doctor` is read-only. `uninstall` removes only the owned scheduler, Kimi Code entries, configuration, and state; it leaves the executable and user-owned Kimi Code content in place.
 
-Daily native scheduling is enabled by default at 09:00 local time. Setup performs an immediate sync, then installs one per-user systemd timer on Linux, LaunchAgent on macOS, or Task Scheduler task on Windows. Native catch-up behavior may invoke llmloot after a missed time, while `sync --if-due` ensures repeated wake or logon events do not repeat an already satisfied boundary. Use `setup --no-schedule` to opt out or remove an existing llmloot schedule.
+## Release validation
 
-Scheduled execution uses the standard per-user configuration directory because Task Scheduler cannot portably preserve a process-local `LLMLOOT_HOME` override while keeping direct argument-safe execution. Use `--no-schedule` when testing with `LLMLOOT_HOME`.
-
-During setup, llmloot adopts a compatible existing Kimi Code provider or copies the corresponding environment credential into a new provider entry in Kimi Code's normal `config.toml`. Later syncs authenticate catalog discovery with that same provider credential. Environment variables are setup bootstrap inputs, not a second runtime credential source. llmloot's own config, state, output, and diagnostics never contain provider keys.
-
-Each sync preserves unrelated Kimi Code content, validates the proposed config with the real `kimi doctor config` command, checks that the file did not change after planning, and atomically replaces it. A source failure preserves that job's previous managed aliases while successful jobs can still reconcile. A valid zero-candidate result removes only unreferenced llmloot-owned aliases. Aliases referenced by `default_model` or `secondary_model.model` are retained and reported.
-
-Model IDs remain exact upstream IDs. When both sources select the same ID for one target, `source_priority` decides which provider keeps it.
-
-`llmloot doctor [--json]` is read-only. `llmloot uninstall --dry-run` previews exact cleanup, and `llmloot uninstall --yes` removes only entries and local files recorded as llmloot-owned. The executable and user-owned Kimi Code content are retained.
-
-## Validation
+Repository tests exercise real Kimi Code configuration validation and native schedulers when their prerequisites are available:
 
 ```sh
 go test ./...
+go test -race ./...
 go vet ./...
-go run ./tools/livecheck --source all
 ```
 
-The live check requires both `OPENROUTER_API_KEY` and `ZENMUX_API_KEY`. It prints only catalog counts and normalization failures.
+The Linux live check uses isolated Kimi Code and llmloot homes, runs setup and sync, invokes the selected model through the real Kimi Code binary, requires a harmless shell-tool turn, and emits a redacted JSON report:
+
+```sh
+go build -o /tmp/llmloot-livecheck ./cmd/llmloot
+go run ./tools/livecheck --llmloot /tmp/llmloot-livecheck --source all
+```
+
+The default is stealth-only for both cells. If a cell has no stealth candidate, the operator must explicitly choose a broader policy; the tool does not rerun or widen automatically:
+
+```sh
+go run ./tools/livecheck --llmloot /tmp/llmloot-livecheck --source all --openrouter-policy free --zenmux-policy free
+```
+
+Discounted checks additionally require one or more source-specific ceiling flags such as `--openrouter-ceiling 'prompt|per_token|USD=0.000001'`.
+
+## License
+
+llmloot is available under the [MIT License](LICENSE).

@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build, such as v0.1.0
+        required: true
+        type: string
+      publish:
+        description: Create the GitHub release after every gate passes
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Kimi Code ${{ matrix.kimi }} on ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        kimi: [0.38.0, latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: 1.26.1
+          cache-dependency-path: go.sum
+      - name: Install verified Kimi Code binary
+        run: go run ./tools/kimiinstall --version "${{ matrix.kimi }}" --bin-dir "${{ runner.temp }}/kimi-bin" --add-to-github-path
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Prepare Linux user scheduler
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          current_uid="$(id -u)"
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@${current_uid}.service"
+          echo "XDG_RUNTIME_DIR=/run/user/${current_uid}" >> "$GITHUB_ENV"
+      - name: Test the tagged source
+        run: go test -count=1 ./...
+        env:
+          LLMLOOT_NATIVE_SCHEDULE_TEST: "1"
+      - name: Vet the tagged source
+        if: runner.os == 'Linux' && matrix.kimi == 'latest'
+        run: go vet ./...
+
+  package:
+    name: Package reproducibly
+    needs: validate
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: 1.26.1
+          cache-dependency-path: go.sum
+      - name: Build and reproduce release assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "release tag must be a semantic version beginning with v" >&2
+            exit 2
+          fi
+          go run ./tools/release --version "$RELEASE_TAG" --output "${RUNNER_TEMP}/release-assets"
+          go run ./tools/release --version "$RELEASE_TAG" --output "${RUNNER_TEMP}/release-rebuild"
+          diff -u "${RUNNER_TEMP}/release-assets/SHA256SUMS" "${RUNNER_TEMP}/release-rebuild/SHA256SUMS"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-assets-${{ inputs.tag }}
+          path: ${{ runner.temp }}/release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  smoke:
+    name: Smoke release on ${{ matrix.os }}
+    needs: package
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: 1.26.1
+          cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-assets-${{ inputs.tag }}
+          path: dist
+      - name: Install verified Kimi Code binary
+        run: go run ./tools/kimiinstall --version latest --bin-dir "${{ runner.temp }}/kimi-bin" --add-to-github-path
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Exercise installer and checksum failure
+        run: go run ./tools/installcheck --dist dist --version "${{ inputs.tag }}" --install-dir "${{ runner.temp }}/llmloot-bin"
+      - name: Exercise release binary
+        run: go run ./tools/artifactcheck --bin-dir "${{ runner.temp }}/llmloot-bin" --source all
+
+  publish:
+    name: Attest and publish
+    if: inputs.publish
+    needs: smoke
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-assets-${{ inputs.tag }}
+          path: dist
+      - name: Verify the immutable release input
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$RELEASE_TAG")"
+      - name: Require public repository visibility
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api "repos/${GITHUB_REPOSITORY}" --jq .visibility)" = "public"
+      - name: Generate build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: dist/*
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --title "llmloot $RELEASE_TAG" --generate-notes

@@ -24,10 +24,14 @@ type Adapter struct {
 }
 
 func New(client *http.Client) *Adapter {
+	return NewAt(client, defaultEndpoint)
+}
+
+func NewAt(client *http.Client, endpoint string) *Adapter {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &Adapter{client: client, endpoint: defaultEndpoint, now: time.Now}
+	return &Adapter{client: client, endpoint: endpoint, now: time.Now}
 }
 
 func (adapter *Adapter) Name() string {

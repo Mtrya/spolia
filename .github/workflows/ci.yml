@@ -3,12 +3,19 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Go ${{ matrix.go }} on ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -16,8 +23,8 @@ jobs:
         go: [stable, oldstable]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
@@ -29,18 +36,96 @@ jobs:
           sudo loginctl enable-linger "$USER"
           sudo systemctl start "user@${current_uid}.service"
           echo "XDG_RUNTIME_DIR=/run/user/${current_uid}" >> "$GITHUB_ENV"
-      - run: go test ./...
+      - name: Test
+        run: go test -count=1 ./...
         env:
           LLMLOOT_NATIVE_SCHEDULE_TEST: "1"
-      - run: go vet ./...
-      - run: go build ./cmd/llmloot
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./cmd/llmloot
 
   race:
+    name: Race detector
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: stable
           cache-dependency-path: go.sum
       - run: go test -race ./...
+
+  kimi-code:
+    name: Kimi Code ${{ matrix.kimi }} on ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        kimi: [0.38.0, latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+      - name: Install verified Kimi Code binary
+        run: go run ./tools/kimiinstall --version "${{ matrix.kimi }}" --bin-dir "${{ runner.temp }}/kimi-bin" --add-to-github-path
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Validate Kimi Code integration
+        run: go test -count=1 ./internal/target/kimicode ./internal/cli
+
+  distribution:
+    name: Reproducible release artifacts
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: 1.26.1
+          cache-dependency-path: go.sum
+      - name: Build release archives twice
+        shell: bash
+        run: |
+          go run ./tools/release --version 0.0.0-ci --output "${RUNNER_TEMP}/release-assets"
+          go run ./tools/release --version 0.0.0-ci --output "${RUNNER_TEMP}/release-rebuild"
+          diff -u "${RUNNER_TEMP}/release-assets/SHA256SUMS" "${RUNNER_TEMP}/release-rebuild/SHA256SUMS"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-assets
+          path: ${{ runner.temp }}/release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+
+  artifact-smoke:
+    name: Release smoke on ${{ matrix.os }}
+    needs: distribution
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: 1.26.1
+          cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-assets
+          path: dist
+      - name: Install verified Kimi Code binary
+        run: go run ./tools/kimiinstall --version latest --bin-dir "${{ runner.temp }}/kimi-bin" --add-to-github-path
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Exercise installer and checksum failure
+        run: go run ./tools/installcheck --dist dist --version 0.0.0-ci --install-dir "${{ runner.temp }}/llmloot-bin"
+      - name: Exercise release binary
+        run: go run ./tools/artifactcheck --bin-dir "${{ runner.temp }}/llmloot-bin" --source all

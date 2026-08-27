@@ -1,3 +1,4 @@
+/dist/
 /llmloot
-*.test
-coverage.out
+/llmloot.exe
+/livecheck-report.json

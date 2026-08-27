@@ -3,7 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -19,13 +22,38 @@ import (
 
 func application(credentials app.CredentialResolver) app.Application {
 	client := &http.Client{Timeout: 30 * time.Second}
+	openRouter := openrouter.New(client)
+	if endpoint := loopbackTestEndpoint("LLMLOOT_TEST_OPENROUTER_MODELS_ENDPOINT"); endpoint != "" {
+		openRouter = openrouter.NewAt(client, endpoint)
+	}
+	zenMux := zenmux.New(client)
+	if endpoint := loopbackTestEndpoint("LLMLOOT_TEST_ZENMUX_MODELS_ENDPOINT"); endpoint != "" {
+		zenMux = zenmux.NewAt(client, endpoint)
+	}
 	return app.Application{
 		Adapters: map[string]source.Adapter{
-			"openrouter": openrouter.New(client),
-			"zenmux":     zenmux.New(client),
+			"openrouter": openRouter,
+			"zenmux":     zenMux,
 		},
 		Credentials: credentials,
 	}
+}
+
+func loopbackTestEndpoint(environmentName string) string {
+	endpoint := os.Getenv(environmentName)
+	parsed, err := url.Parse(endpoint)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return ""
+	}
+	host := parsed.Hostname()
+	if host == "localhost" {
+		return endpoint
+	}
+	address := net.ParseIP(host)
+	if address == nil || !address.IsLoopback() {
+		return ""
+	}
+	return endpoint
 }
 
 func providersForJobs(configuration config.Config, jobs []config.NamedJob) (map[string]kimicode.ProviderSpec, error) {
