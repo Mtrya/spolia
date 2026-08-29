@@ -40,7 +40,7 @@ Only concrete OpenAI-compatible chat models with text output and a positive cont
 
 ## Credentials and Kimi Code
 
-A source participates only when its corresponding Kimi Code provider has an API key. Setup may adopt a compatible existing provider or copy a bootstrap environment credential into Kimi Code. Later discovery resolves the credential through Kimi Code so catalog access and inference use the same account. spolia does not persist credentials in its own files.
+A source participates only when its corresponding Kimi Code provider has an API key. Setup may adopt a compatible existing provider or copy a bootstrap environment credential into Kimi Code. Setup narrows to credentialed sources: the interactive wizard defaults each source to off when no credential is available, and non-interactive setup skips such sources with a note instead of failing. Later discovery resolves the credential through Kimi Code so catalog access and inference use the same account. spolia does not persist credentials in its own files.
 
 Provider IDs are `openrouter` and `zenmux`; model aliases are exact upstream IDs and the provider field determines routing. spolia never changes Kimi Code's default model, secondary-model settings, global thinking settings, permissions, or active sessions.
 
@@ -53,6 +53,14 @@ Reconciliation holds one spolia process lock, validates a temporary target with 
 One global daily schedule runs all enabled jobs at 09:00 local time by default. A successful full sync after the current local boundary satisfies it; partial, failed, or single-job runs do not. Plain `sync` always refreshes and `sync --if-due` may return an already-satisfied result.
 
 Linux uses a systemd user timer, macOS uses a LaunchAgent, and Windows uses Task Scheduler. Each registration invokes the absolute executable with `sync --if-due --quiet`, uses native catch-up behavior, and remains per-user. There are no cron or system-wide fallbacks.
+
+Scheduler installation is the last setup step and is non-fatal: when it fails after models, configuration, and state were written, setup still succeeds and reports the scheduling error as a warning with a remedy. `doctor` is the surface that reports the scheduler as unhealthy.
+
+## Command interface
+
+Exit codes are a contract: `0` for success (including zero candidates, a not-due scheduled sync, and a nothing-to-remove uninstall), `1` for runtime and environment failures (including a missing or invalid configuration), and `2` for command-line usage errors. Human output ends with a plain-language summary and a next action; `--json` schemas evolve additively.
+
+`doctor` doubles as the status surface: managed models with the exact command to use each, per-job last-run outcomes, and the next scheduled check. On an unconfigured installation it reports `not_configured` with a single pointer to `setup` instead of health errors.
 
 ## Distribution
 
@@ -74,7 +82,28 @@ Installers resolve the stable GitHub latest-release redirect, verify the chosen 
 
 ## Release evidence
 
-A release candidate must pass formatting, tests, vet, race checks, native scheduler registration and cleanup, real Kimi Code configuration validation, reproducible packaging, per-platform artifact execution, and installer checksum-failure tests.
+A release candidate must pass formatting, tests, vet, race checks, native scheduler registration and cleanup, real Kimi Code configuration validation, reproducible packaging, per-platform artifact execution, and installer checksum-failure tests. Repository tests exercise real Kimi Code configuration validation and native schedulers when their prerequisites are available:
+
+```sh
+go test ./...
+go test -race ./...
+go vet ./...
+```
+
+The Linux live check uses isolated Kimi Code and spolia homes, runs setup and sync, activates the selected alias only inside the disposable Kimi Code home, invokes it through the real Kimi Code binary, requires a harmless shell-tool turn, and emits a redacted JSON report. It never changes the operator's Kimi Code configuration:
+
+```sh
+go build -o /tmp/spolia-livecheck ./cmd/spolia
+go run ./tools/livecheck --spolia /tmp/spolia-livecheck --source all
+```
+
+The default is stealth-only for both cells. If a cell has no stealth candidate, the operator must explicitly choose a broader policy; the tool does not rerun or widen automatically:
+
+```sh
+go run ./tools/livecheck --spolia /tmp/spolia-livecheck --source all --openrouter-policy free --zenmux-policy free
+```
+
+To retry a different candidate without changing policy, use one source and name an exact model that the sync selected, such as `--source zenmux --zenmux-policy free --model '<exact-selected-model-id>'`. The check rejects models outside that run's eligible selection.
 
 Provider credentials are never placed in public CI. Before publication, an operator runs the two Linux live cells with isolated homes and real provider credentials. Each cell must select a model under its explicit policy and complete a harmless Kimi Code tool-use turn. Direct API requests and zero-candidate results do not satisfy that check.
 

@@ -62,5 +62,12 @@ try {
 
 Write-Output "Installed spolia $Version to $InstallDir\spolia.exe."
 if (($env:PATH -split ';') -notcontains $InstallDir) {
-    Write-Output "Add $InstallDir to your user PATH, then run: spolia setup"
+    $UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($null -ne $UserPath -and ($UserPath -split ';') -contains $InstallDir) {
+        Write-Output "Your user PATH already includes $InstallDir; open a new terminal, then run: spolia setup"
+    } else {
+        Write-Output "PATH does not include $InstallDir yet. To add it to your user PATH permanently:"
+        Write-Output "  [Environment]::SetEnvironmentVariable('PATH', [Environment]::GetEnvironmentVariable('PATH', 'User') + ';$InstallDir', 'User')"
+        Write-Output "Then open a new terminal and run: spolia setup"
+    }
 }

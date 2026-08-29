@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"strings"
 	"testing"
@@ -66,6 +67,42 @@ func TestIfDueRejectsSingleJobAtTheCommandBoundary(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if exitCode := Run(context.Background(), []string{"sync", "openrouter-kimi-code", "--if-due"}, &stdout, &stderr); exitCode != 2 {
 		t.Fatalf("exit code = %d, stderr = %s", exitCode, stderr.String())
+	}
+}
+
+func TestAskYesNoExplainsInvalidInput(t *testing.T) {
+	t.Parallel()
+	reader := bufio.NewReader(strings.NewReader("maybe\nyes\n"))
+	var output strings.Builder
+	value, err := askYesNo(reader, &output, "Continue?", false)
+	if err != nil || !value {
+		t.Fatalf("value = %v, err = %v", value, err)
+	}
+	if !strings.Contains(output.String(), `please answer "y" or "n"`) {
+		t.Fatalf("invalid input was not explained: %q", output.String())
+	}
+}
+
+func TestHelpOrganizesCommandsByUserGoal(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr strings.Builder
+	if exitCode := Run(context.Background(), []string{"help"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("exit code = %d", exitCode)
+	}
+	text := stdout.String()
+	for _, command := range []string{"setup", "sync", "doctor", "uninstall"} {
+		if !strings.Contains(text, "spolia "+command) {
+			t.Fatalf("help does not mention %q:\n%s", command, text)
+		}
+	}
+	for _, subcommand := range []string{"setup", "sync", "doctor", "uninstall"} {
+		var out strings.Builder
+		if exitCode := Run(context.Background(), []string{subcommand, "--help"}, &out, &strings.Builder{}); exitCode != 0 {
+			t.Fatalf("%s --help exit code = %d", subcommand, exitCode)
+		}
+		if !strings.Contains(out.String(), "Example:") {
+			t.Fatalf("%s --help has no example:\n%s", subcommand, out.String())
+		}
 	}
 }
 

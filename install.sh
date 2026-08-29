@@ -65,5 +65,21 @@ install -m 0755 "${temporary}/${archive_root}/spolia" "${install_dir}/spolia"
 printf 'Installed spolia %s to %s/spolia.\n' "${version}" "${install_dir}"
 case ":${PATH}:" in
   *":${install_dir}:"*) ;;
-  *) printf 'Add %s to PATH, then run: spolia setup\n' "${install_dir}" ;;
+  *)
+    profile_hit=""
+    for profile in "${HOME}/.profile" "${HOME}/.bashrc" "${HOME}/.zshrc"; do
+      if [[ -f "${profile}" ]] && grep -qF "${install_dir}" "${profile}"; then
+        profile_hit="${profile}"
+        break
+      fi
+    done
+    if [[ -n "${profile_hit}" ]]; then
+      printf '%s already adds %s to PATH; open a new terminal, then run: spolia setup\n' "${profile_hit}" "${install_dir}"
+    else
+      printf 'PATH does not include %s yet. To fix it now and permanently:\n' "${install_dir}"
+      printf '  export PATH="%s:$PATH"\n' "${install_dir}"
+      printf "  echo 'export PATH=\"%s:\$PATH\"' >> ~/.profile\n" "${install_dir}"
+      printf 'Then run: spolia setup\n'
+    fi
+    ;;
 esac

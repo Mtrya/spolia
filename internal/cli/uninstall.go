@@ -38,68 +38,87 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		printUninstallUsage(stderr)
-		return 2
+		return exitUsage
 	}
 	if options.help {
 		printUninstallUsage(stdout)
-		return 0
+		return exitOK
 	}
 	if options.json && !options.dryRun && !options.yes {
 		fmt.Fprintln(stderr, "--json requires --yes when uninstalling")
-		return 2
+		return exitUsage
 	}
 	configPath, err := config.Path()
 	if err != nil {
 		fmt.Fprintln(stderr, err)
-		return 2
+		return exitFailure
 	}
-	configuration, err := config.Load(configPath)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	targetName, err := onlyKimiTarget(configuration)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+	configuration, notConfigured, configErr := loadConfiguration(configPath)
+	degraded := configErr != nil && !notConfigured
+	if degraded {
+		fmt.Fprintf(stderr, "configuration is unreadable (%v); continuing with state-only cleanup\n", compactError(configErr.Error()))
 	}
 	lock, err := state.AcquireLock(config.LockPath(configPath))
 	if err != nil {
 		fmt.Fprintln(stderr, err)
-		return 1
+		return exitFailure
 	}
 	defer func() {
 		if err := lock.Release(); err != nil {
 			fmt.Fprintln(stderr, err)
-			exitCode = 1
+			exitCode = exitFailure
 		}
 	}()
 	currentState, exists, err := state.Read(config.StatePath(configPath))
 	if err != nil {
 		fmt.Fprintln(stderr, err)
-		return 1
+		return exitFailure
+	}
+	if notConfigured && !exists {
+		fmt.Fprintln(stderr, "spolia is not set up; nothing to remove")
+		return exitOK
 	}
 	if !exists {
 		fmt.Fprintln(stderr, "ownership state is missing; target cleanup cannot continue safely")
-		return 1
+		return exitFailure
+	}
+	targetName := ""
+	adapter := "kimi-code"
+	if degraded {
+		// The configuration cannot be read, so take the target from the
+		// ownership state. This version never writes more than one target.
+		for name := range currentState.Targets {
+			if targetName == "" || name < targetName {
+				targetName = name
+			}
+		}
+	} else {
+		targetName, err = onlyKimiTarget(configuration)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return exitFailure
+		}
+		adapter = configuration.Targets[targetName].Adapter
 	}
 	installation, err := kimicode.Discover(ctx)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
-		return 1
+		return exitFailure
 	}
 	targetPath := installation.ConfigPath
-	if stored := currentState.Targets[targetName].Path; stored != "" {
-		targetPath = stored
+	if targetName != "" {
+		if stored := currentState.Targets[targetName].Path; stored != "" {
+			targetPath = stored
+		}
 	}
 	document, err := kimicode.Load(targetPath)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
-		return 1
+		return exitFailure
 	}
 	plan := kimicode.PlanUninstall(document, currentState.Targets[targetName])
 	operation := app.SyncResult{}
-	attachTargetPlan(&operation, targetName, configuration.Targets[targetName].Adapter, plan)
+	attachTargetPlan(&operation, targetName, adapter, plan)
 	result := uninstallResult{SchemaVersion: 1, Operation: "uninstall", DryRun: options.dryRun, Outcome: "success", TargetPlan: operation.TargetPlans[0], Artifacts: []string{configPath, config.StatePath(configPath)}}
 	var schedulerManager schedule.Manager
 	if currentState.Scheduler != nil {
@@ -107,7 +126,7 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 		schedulerManager, schedulerInspection, err = inspectStoredScheduler(ctx, *currentState.Scheduler)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
-			return 1
+			return exitFailure
 		}
 		result.Scheduler = &schedulerInspection
 		result.Artifacts = append(schedulerInspection.Artifacts, result.Artifacts...)
@@ -125,28 +144,28 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 		if err := writeUninstall(stdout, result, options.json); err != nil {
 			fmt.Fprintln(stderr, err)
 		}
-		return 1
+		return exitFailure
 	}
 	if options.dryRun {
 		if err := writeUninstall(stdout, result, options.json); err != nil {
 			fmt.Fprintln(stderr, err)
-			return 1
+			return exitFailure
 		}
-		return 0
+		return exitOK
 	}
 	if !options.yes {
 		if err := writeUninstall(stdout, result, false); err != nil {
 			fmt.Fprintln(stderr, err)
-			return 1
+			return exitFailure
 		}
 		confirmed, err := askYesNo(bufio.NewReader(os.Stdin), stdout, "Remove these spolia-owned artifacts?", false)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
-			return 1
+			return exitFailure
 		}
 		if !confirmed {
 			fmt.Fprintln(stderr, "uninstall cancelled")
-			return 1
+			return exitFailure
 		}
 	}
 	if result.Scheduler != nil {
@@ -156,7 +175,7 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 				_ = writeUninstall(stdout, result, options.json)
 			}
 			fmt.Fprintln(stderr, err)
-			return 1
+			return exitFailure
 		}
 	}
 	if err := plan.Apply(ctx, installation); err != nil {
@@ -166,7 +185,7 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 			_ = writeUninstall(stdout, result, options.json)
 		}
 		fmt.Fprintln(stderr, err)
-		return 1
+		return exitFailure
 	}
 	if err := removeIfExists(configPath); err != nil {
 		result.Outcome = "failure"
@@ -174,7 +193,7 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 			_ = writeUninstall(stdout, result, options.json)
 		}
 		fmt.Fprintln(stderr, err)
-		return 1
+		return exitFailure
 	}
 	if err := removeIfExists(config.StatePath(configPath)); err != nil {
 		result.Outcome = "failure"
@@ -182,15 +201,15 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 			_ = writeUninstall(stdout, result, options.json)
 		}
 		fmt.Fprintln(stderr, err)
-		return 1
+		return exitFailure
 	}
 	if options.yes {
 		if err := writeUninstall(stdout, result, options.json); err != nil {
 			fmt.Fprintln(stderr, err)
-			return 1
+			return exitFailure
 		}
 	}
-	return 0
+	return exitOK
 }
 
 func removeIfExists(path string) error {
@@ -253,5 +272,15 @@ func parseUninstallOptions(arguments []string) (uninstallOptions, error) {
 }
 
 func printUninstallUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: spolia uninstall [--dry-run] [--yes] [--json]")
+	fmt.Fprintln(writer, `usage: spolia uninstall [--dry-run] [--yes] [--json]
+
+Removes the scheduler, the Kimi Code entries spolia created, and spolia's own
+configuration and state. The spolia executable and your own Kimi Code content
+stay in place.
+
+  --dry-run  show what would be removed without removing anything
+  --yes      remove without asking for confirmation
+  --json     print the result as JSON
+
+Example: spolia uninstall --dry-run`)
 }

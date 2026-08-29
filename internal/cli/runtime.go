@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -169,6 +170,16 @@ func compactError(message string) string {
 		message = message[:300]
 	}
 	return message
+}
+
+// loadConfiguration reads the configuration and distinguishes a missing file
+// (a normal first-run state) from an unreadable or invalid one.
+func loadConfiguration(configPath string) (config.Config, bool, error) {
+	configuration, err := config.Load(configPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return config.Config{}, true, nil
+	}
+	return configuration, false, err
 }
 
 func onlyKimiTarget(configuration config.Config) (string, error) {

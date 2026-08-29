@@ -1,3 +1,9 @@
+# Reference copy of the complete two-source configuration.
+# The live file is written by `spolia setup` to the per-user config directory
+# (~/.config/spolia/config.toml on Linux, ~/Library/Application Support/spolia/
+# config.toml on macOS, %APPDATA%\spolia\config.toml on Windows). Prefer
+# rerunning `spolia setup` (or `spolia setup --advanced`) over hand edits;
+# direct edits apply on the next sync.
 schema_version = 1
 source_priority = ["openrouter", "zenmux"]
 

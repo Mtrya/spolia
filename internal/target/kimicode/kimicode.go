@@ -44,7 +44,7 @@ func ProviderForSource(sourceName string) (ProviderSpec, error) {
 func Discover(ctx context.Context) (Installation, error) {
 	binary, err := exec.LookPath("kimi")
 	if err != nil {
-		return Installation{}, errors.New("Kimi Code executable not found in PATH")
+		return Installation{}, fmt.Errorf("Kimi Code executable not found in PATH; install Kimi Code %s or newer first (https://www.kimi.com/code/docs/en/)", MinimumVersion)
 	}
 	binary, err = filepath.Abs(binary)
 	if err != nil {
@@ -69,7 +69,7 @@ func InspectInstallation(ctx context.Context, binary, home string) (Installation
 	}
 	version := strings.TrimSpace(string(output))
 	if compareVersions(version, MinimumVersion) < 0 {
-		return Installation{}, fmt.Errorf("Kimi Code %s is unsupported; version %s or newer is required", version, MinimumVersion)
+		return Installation{}, fmt.Errorf("Kimi Code %s is unsupported; upgrade to %s or newer with `kimi upgrade`", version, MinimumVersion)
 	}
 	absoluteHome, err := filepath.Abs(home)
 	if err != nil {
