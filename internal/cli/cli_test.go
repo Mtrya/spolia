@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/state"
 )
 
 func TestSyncOptionsAcceptJobBeforeOrAfterFlags(t *testing.T) {
@@ -66,6 +69,58 @@ func TestIfDueRejectsSingleJobAtTheCommandBoundary(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if exitCode := Run(context.Background(), []string{"sync", "openrouter-kimi-code", "--if-due"}, &stdout, &stderr); exitCode != 2 {
 		t.Fatalf("exit code = %d, stderr = %s", exitCode, stderr.String())
+	}
+}
+
+func TestAskYesNoExplainsInvalidInput(t *testing.T) {
+	t.Parallel()
+	reader := bufio.NewReader(strings.NewReader("maybe\nyes\n"))
+	var output strings.Builder
+	value, err := askYesNo(reader, &output, "Continue?", false)
+	if err != nil || !value {
+		t.Fatalf("value = %v, err = %v", value, err)
+	}
+	if !strings.Contains(output.String(), `please answer "y" or "n"`) {
+		t.Fatalf("invalid input was not explained: %q", output.String())
+	}
+}
+
+func TestHelpOrganizesCommandsByUserGoal(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr strings.Builder
+	if exitCode := Run(context.Background(), []string{"help"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("exit code = %d", exitCode)
+	}
+	text := stdout.String()
+	for _, command := range []string{"setup", "sync", "doctor", "uninstall"} {
+		if !strings.Contains(text, "spolia "+command) {
+			t.Fatalf("help does not mention %q:\n%s", command, text)
+		}
+	}
+	for _, subcommand := range []string{"setup", "sync", "doctor", "uninstall"} {
+		var out strings.Builder
+		if exitCode := Run(context.Background(), []string{subcommand, "--help"}, &out, &strings.Builder{}); exitCode != 0 {
+			t.Fatalf("%s --help exit code = %d", subcommand, exitCode)
+		}
+		if !strings.Contains(out.String(), "Example:") {
+			t.Fatalf("%s --help has no example:\n%s", subcommand, out.String())
+		}
+	}
+}
+
+func TestLastSuccessfulCheckUsesJobTimestamps(t *testing.T) {
+	t.Parallel()
+	if lastSuccessfulCheck(state.New()) != nil {
+		t.Fatal("empty state reported a last check")
+	}
+	early := time.Date(2026, 8, 29, 9, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 8, 29, 17, 30, 0, 0, time.UTC)
+	current := state.New()
+	current.RecordJob("first", "selected", nil, "", early)
+	current.RecordJob("second", "selected", nil, "", late)
+	got := lastSuccessfulCheck(current)
+	if got == nil || !got.Equal(late) {
+		t.Fatalf("lastSuccessfulCheck = %v, want %v", got, late)
 	}
 }
 

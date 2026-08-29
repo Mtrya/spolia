@@ -39,6 +39,8 @@ type SyncResult struct {
 	Collisions    []Collision         `json:"collisions,omitempty"`
 	TargetPlans   []TargetPlan        `json:"target_plans"`
 	Schedule      *SchedulePlan       `json:"schedule,omitempty"`
+	LastCheck     *time.Time          `json:"last_check,omitempty"`
+	NextCheck     *time.Time          `json:"next_check,omitempty"`
 	Observed      map[string][]string `json:"-"`
 	AttemptedAt   time.Time           `json:"-"`
 }
@@ -60,6 +62,8 @@ type JobResult struct {
 	Target             string          `json:"target"`
 	Outcome            string          `json:"outcome"`
 	PreservePrevious   bool            `json:"preserve_previous,omitempty"`
+	IncludeFree        bool            `json:"include_free"`
+	CredentialEnv      string          `json:"credential_env,omitempty"`
 	Selected           []SelectedModel `json:"selected"`
 	ExclusionSummary   map[string]int  `json:"exclusion_summary"`
 	Error              string          `json:"error,omitempty"`
@@ -180,6 +184,8 @@ func plan(configuration config.Config, currentState state.State, jobs []config.N
 			Name:             job.Name,
 			Source:           job.Source,
 			Target:           job.Target,
+			IncludeFree:      job.Policy.IncludeFree,
+			CredentialEnv:    configuration.Sources[job.Source].CredentialEnv,
 			Selected:         []SelectedModel{},
 			ExclusionSummary: make(map[string]int),
 			limit:            job.Limit,

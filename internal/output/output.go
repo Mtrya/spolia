@@ -17,7 +17,19 @@ func JSON(writer io.Writer, result app.SyncResult) error {
 	return encoder.Encode(result)
 }
 
+// Human renders the full final report: operation detail plus the
+// plain-language summary of what the user can do next.
 func Human(writer io.Writer, result app.SyncResult) error {
+	if err := Plan(writer, result); err != nil {
+		return err
+	}
+	return Summary(writer, result)
+}
+
+// Plan renders only the operation detail: job outcomes, selections,
+// exclusions, and target changes. It is used for previews before any change
+// is applied, where the summary's "ready to use" language would be wrong.
+func Plan(writer io.Writer, result app.SyncResult) error {
 	operation := result.Operation
 	if result.DryRun {
 		operation += " dry-run"
@@ -33,6 +45,11 @@ func Human(writer io.Writer, result app.SyncResult) error {
 			if _, err := fmt.Fprintf(writer, "  error: %s\n", job.Error); err != nil {
 				return err
 			}
+			if hint := catalogErrorHint(job); hint != "" {
+				if _, err := fmt.Fprintf(writer, "  hint: %s\n", hint); err != nil {
+					return err
+				}
+			}
 		}
 		for _, selected := range job.Selected {
 			if _, err := fmt.Fprintf(writer, "  %s  %s  %s\n", selected.Class, selected.ID, selected.DisplayName); err != nil {
@@ -45,11 +62,16 @@ func Human(writer io.Writer, result app.SyncResult) error {
 				keys = append(keys, key)
 			}
 			sort.Strings(keys)
-			if _, err := fmt.Fprint(writer, "  excluded:"); err != nil {
+			if _, err := fmt.Fprint(writer, "  excluded: "); err != nil {
 				return err
 			}
-			for _, key := range keys {
-				if _, err := fmt.Fprintf(writer, " %s=%d", key, job.ExclusionSummary[key]); err != nil {
+			for index, key := range keys {
+				if index > 0 {
+					if _, err := fmt.Fprint(writer, ", "); err != nil {
+						return err
+					}
+				}
+				if _, err := fmt.Fprintf(writer, "%d %s", job.ExclusionSummary[key], exclusionPhrase(key)); err != nil {
 					return err
 				}
 			}
@@ -89,4 +111,157 @@ func Human(writer io.Writer, result app.SyncResult) error {
 		}
 	}
 	return nil
+}
+
+// Summary renders the plain-language conclusion: whether models are usable,
+// the exact command to try one, the actionable reason behind an empty result,
+// and what happens next.
+func Summary(writer io.Writer, result app.SyncResult) error {
+	if result.Outcome == "not_due" {
+		return nil
+	}
+	selected := selectedIDs(result)
+	if result.Outcome != "failure" && result.Outcome != "partial_failure" {
+		if len(selected) > 0 {
+			if result.DryRun {
+				if _, err := fmt.Fprintln(writer, "Dry run: no changes were written. These models would become available in Kimi Code:"); err != nil {
+					return err
+				}
+				for _, id := range selected {
+					if _, err := fmt.Fprintf(writer, "  %s\n", id); err != nil {
+						return err
+					}
+				}
+				if _, err := fmt.Fprintln(writer, "Run spolia sync without --dry-run to apply them."); err != nil {
+					return err
+				}
+			} else {
+				if _, err := fmt.Fprintln(writer, "Models ready in Kimi Code:"); err != nil {
+					return err
+				}
+				for _, id := range selected {
+					if _, err := fmt.Fprintf(writer, "  %s\n", id); err != nil {
+						return err
+					}
+				}
+				if _, err := fmt.Fprintf(writer, "Try one now: kimi --model '%s'\n", selected[0]); err != nil {
+					return err
+				}
+			}
+		} else {
+			conclusion := "No matching models are available right now."
+			if result.Operation == "setup" {
+				conclusion = "Setup is complete, but no matching models are available right now."
+			}
+			if _, err := fmt.Fprintln(writer, conclusion); err != nil {
+				return err
+			}
+			if disabled := freeModelsDisabled(result); disabled > 0 {
+				if _, err := fmt.Fprintf(writer, "%d ordinary free models are available; rerun spolia setup and enable ordinary free models to use one.\n", disabled); err != nil {
+					return err
+				}
+			}
+			if nothingWritten(result) {
+				if _, err := fmt.Fprintln(writer, "Kimi Code configuration unchanged."); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if result.Schedule != nil {
+		switch {
+		case result.Schedule.Status == "error" || result.Schedule.Error != "":
+			message := fmt.Sprintf("Daily scheduling failed: %s.", result.Schedule.Error)
+			if len(selected) > 0 {
+				message += " Models are ready;"
+			}
+			message += " Rerun spolia setup --no-schedule or fix the cause."
+			if _, err := fmt.Fprintln(writer, message); err != nil {
+				return err
+			}
+		case result.Schedule.Enabled && result.Schedule.Status != "disabled" && result.Schedule.Status != "removed":
+			if _, err := fmt.Fprintf(writer, "Spolia will check again daily at %s.\n", result.Schedule.LocalTime); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func selectedIDs(result app.SyncResult) []string {
+	var ids []string
+	seen := make(map[string]bool)
+	for _, job := range result.Jobs {
+		for _, selected := range job.Selected {
+			if !seen[selected.ID] {
+				seen[selected.ID] = true
+				ids = append(ids, selected.ID)
+			}
+		}
+	}
+	return ids
+}
+
+// freeModelsDisabled counts ordinary free models that were excluded only
+// because the job policy did not opt into them.
+func freeModelsDisabled(result app.SyncResult) int {
+	total := 0
+	for _, job := range result.Jobs {
+		if !job.IncludeFree {
+			total += job.ExclusionSummary["class_disabled"]
+		}
+	}
+	return total
+}
+
+func nothingWritten(result app.SyncResult) bool {
+	for _, targetPlan := range result.TargetPlans {
+		if targetPlan.Write {
+			return false
+		}
+	}
+	return true
+}
+
+// catalogErrorHint translates common catalog fetch failures into the action
+// that resolves them. The raw error stays on the detail line above. Stored
+// Kimi Code credentials take precedence over the environment, so an
+// authentication failure always points at the stored credential.
+func catalogErrorHint(job app.JobResult) string {
+	switch {
+	case strings.Contains(job.Error, "HTTP 401") || strings.Contains(job.Error, "HTTP 403"):
+		if job.CredentialEnv != "" {
+			return fmt.Sprintf("the %s API key was rejected; update the %s provider credential in Kimi Code's config.toml, or remove it and rerun spolia setup with a fresh %s", job.Source, job.Source, job.CredentialEnv)
+		}
+		return fmt.Sprintf("the %s API key was rejected; update the provider credential in Kimi Code and retry", job.Source)
+	case strings.Contains(job.Error, "Timeout") || strings.Contains(job.Error, "deadline exceeded") || strings.Contains(job.Error, "no such host") || strings.Contains(job.Error, "connection refused"):
+		return fmt.Sprintf("cannot reach %s; check network access and retry", job.Source)
+	}
+	return ""
+}
+
+var exclusionPhrases = map[string]string{
+	"class_disabled":                  "ordinary free models not enabled",
+	"context_below_minimum":           "below the minimum context",
+	"expired":                         "expired",
+	"invalid_context":                 "invalid context window",
+	"malformed_price":                 "malformed pricing",
+	"malformed_record":                "unreadable catalog record",
+	"missing_required_price":          "missing pricing",
+	"no_text_output":                  "no text output",
+	"not_concrete_model":              "not a concrete model",
+	"paid_model":                      "paid",
+	"source_collision":                "kept from a higher-priority source",
+	"stealth_price_invalid":           "stealth pricing invalid",
+	"stealth_requires_free":           "stealth without free pricing",
+	"tools_explicitly_unsupported":    "tools unsupported",
+	"unsupported_protocol":            "unsupported protocol",
+	"unsupported_required_price_unit": "unsupported pricing unit",
+}
+
+func exclusionPhrase(code string) string {
+	if phrase, ok := exclusionPhrases[code]; ok {
+		return phrase
+	}
+	return code
 }

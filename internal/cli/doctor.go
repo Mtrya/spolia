@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Mtrya/spolia/internal/config"
 	"github.com/Mtrya/spolia/internal/schedule"
@@ -20,7 +21,37 @@ type doctorResult struct {
 	SchemaVersion int           `json:"schema_version"`
 	Operation     string        `json:"operation"`
 	Outcome       string        `json:"outcome"`
+	Status        *doctorStatus `json:"status,omitempty"`
 	Checks        []doctorCheck `json:"checks"`
+}
+
+// doctorStatus is the at-a-glance answer to "what is spolia doing right
+// now": which models it manages, how the last runs went, and when the next
+// scheduled check happens.
+type doctorStatus struct {
+	Models    []doctorModelStatus    `json:"models,omitempty"`
+	Jobs      []doctorJobStatus      `json:"jobs,omitempty"`
+	Scheduler *doctorSchedulerStatus `json:"scheduler,omitempty"`
+}
+
+type doctorModelStatus struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Job    string `json:"job"`
+}
+
+type doctorJobStatus struct {
+	Name        string     `json:"name"`
+	Outcome     string     `json:"outcome"`
+	LastAttempt *time.Time `json:"last_attempt,omitempty"`
+	Error       string     `json:"error,omitempty"`
+}
+
+type doctorSchedulerStatus struct {
+	Enabled   bool       `json:"enabled"`
+	Kind      string     `json:"kind,omitempty"`
+	LocalTime string     `json:"local_time,omitempty"`
+	NextCheck *time.Time `json:"next_check,omitempty"`
 }
 
 type doctorCheck struct {
@@ -40,11 +71,11 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		printDoctorUsage(stderr)
-		return 2
+		return exitUsage
 	}
 	if options.help {
 		printDoctorUsage(stdout)
-		return 0
+		return exitOK
 	}
 	result := doctorResult{SchemaVersion: 1, Operation: "doctor", Outcome: "healthy", Checks: []doctorCheck{}}
 	executable, executableErr := os.Executable()
@@ -58,9 +89,15 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 		result.addError("spolia_config", pathErr.Error(), "Fix the user configuration directory environment.")
 		return writeDoctor(stdout, stderr, options.json, result)
 	}
-	configuration, configErr := config.Load(configPath)
+	configuration, notConfigured, configErr := loadConfiguration(configPath)
+	if notConfigured {
+		result.Outcome = "not_configured"
+		result.Checks = append(result.Checks, doctorCheck{Name: "spolia_config", Status: "ok", Detail: "spolia is not set up yet", Remediation: "Run spolia setup."})
+		reportKimiEnvironment(ctx, &result)
+		return writeDoctor(stdout, stderr, options.json, result)
+	}
 	if configErr != nil {
-		result.addError("spolia_config", configErr.Error(), "Run spolia setup after correcting or removing the invalid config.")
+		result.addError("spolia_config", configErr.Error(), "Fix or remove "+configPath+", or run spolia setup to recreate it.")
 	} else {
 		result.addOK("spolia_config", "configuration is valid")
 	}
@@ -138,6 +175,7 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 			result.addOK("catalog:"+job.Source, job.Outcome)
 		}
 	}
+	conflictedModels := make(map[string]bool)
 	if stateErr == nil && stateExists {
 		targetName, targetErr := onlyKimiTarget(configuration)
 		if targetErr != nil {
@@ -147,6 +185,9 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 			for _, conflict := range kimicode.InspectOwnership(document, currentState.Targets[targetName]) {
 				name := "managed:" + conflict.Kind + ":" + conflict.ID
 				reported[name] = true
+				if conflict.Kind == "model" {
+					conflictedModels[conflict.ID] = true
+				}
 				result.addError(name, conflict.Reason, "Resolve the conflicting target edit, then rerun doctor.")
 			}
 			requirements := providerRequirements(ctx, credentials, providers)
@@ -154,6 +195,9 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 			if len(plan.Conflicts) > 0 {
 				for _, conflict := range plan.Conflicts {
 					name := "managed:" + conflict.Kind + ":" + conflict.ID
+					if conflict.Kind == "model" {
+						conflictedModels[conflict.ID] = true
+					}
 					if !reported[name] {
 						result.addError(name, conflict.Reason, "Resolve the conflicting target edit, then rerun doctor.")
 					}
@@ -170,6 +214,7 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 	}
 	checkScheduler(ctx, configuration, currentState, stateErr == nil && stateExists, &result)
 	if stateErr == nil && stateExists {
+		result.Status = buildDoctorStatus(configuration, currentState, conflictedModels)
 		jobNames := make([]string, 0, len(currentState.Jobs))
 		for jobName := range currentState.Jobs {
 			jobNames = append(jobNames, jobName)
@@ -231,8 +276,85 @@ func checkScheduler(ctx context.Context, configuration config.Config, currentSta
 	case currentState.Scheduler.ExecutablePath != desired.Executable || currentState.Scheduler.LocalTime != desired.LocalTime:
 		result.addError("scheduler", "the installed schedule does not match the current executable path or configured time", "Run spolia setup to update the native schedule.")
 	default:
-		result.addOK("scheduler", fmt.Sprintf("%s %s at %s", inspection.Kind, inspection.Status, currentState.Scheduler.LocalTime))
+		detail := fmt.Sprintf("%s %s at %s", inspection.Kind, inspection.Status, currentState.Scheduler.LocalTime)
+		due, boundary, err := schedule.IsDue(time.Now().In(time.Local), currentState.Scheduler.LocalTime, currentState.LastSuccessfulScheduleBoundary)
+		if err == nil {
+			next := boundary
+			if !due {
+				next = boundary.AddDate(0, 0, 1)
+			}
+			detail += "; next check " + next.Local().Format("2006-01-02 15:04")
+		}
+		result.addOK("scheduler", detail)
 	}
+}
+
+// reportKimiEnvironment adds the Kimi Code prerequisite checks that do not
+// depend on a spolia configuration, so a first-run doctor still tells the
+// user whether the required binary is present.
+func reportKimiEnvironment(ctx context.Context, result *doctorResult) {
+	installation, err := kimicode.Discover(ctx)
+	if err != nil {
+		result.addError("kimi_code", err.Error(), "Install a supported Kimi Code release and ensure kimi is in PATH.")
+		return
+	}
+	result.addOK("kimi_code", fmt.Sprintf("version %s at %s", installation.Version, installation.Binary))
+}
+
+// buildDoctorStatus summarizes what spolia currently manages from the
+// ownership state: the models present in Kimi Code, each job's last run,
+// and the next scheduled check. Models with an ownership conflict (for
+// example, deleted by the user) are excluded — recommending a `kimi
+// --model` command for an alias known to be absent would mislead.
+func buildDoctorStatus(configuration config.Config, currentState state.State, conflictedModels map[string]bool) *doctorStatus {
+	status := &doctorStatus{}
+	for _, targetName := range sortedTargetNames(currentState) {
+		for alias, owned := range currentState.Targets[targetName].Models {
+			if conflictedModels[alias] {
+				continue
+			}
+			status.Models = append(status.Models, doctorModelStatus{ID: alias, Source: owned.Source, Job: owned.Job})
+		}
+	}
+	sort.Slice(status.Models, func(left, right int) bool { return status.Models[left].ID < status.Models[right].ID })
+	jobNames := make([]string, 0, len(currentState.Jobs))
+	for jobName := range currentState.Jobs {
+		jobNames = append(jobNames, jobName)
+	}
+	sort.Strings(jobNames)
+	for _, jobName := range jobNames {
+		jobState := currentState.Jobs[jobName]
+		status.Jobs = append(status.Jobs, doctorJobStatus{Name: jobName, Outcome: jobState.Outcome, LastAttempt: jobState.LastAttempt, Error: jobState.Error})
+	}
+	localTime := configuration.Schedule.LocalTime
+	if currentState.Scheduler != nil && currentState.Scheduler.LocalTime != "" {
+		localTime = currentState.Scheduler.LocalTime
+	}
+	schedulerStatus := &doctorSchedulerStatus{Enabled: configuration.Schedule.Enabled, LocalTime: localTime}
+	if currentState.Scheduler != nil {
+		schedulerStatus.Kind = currentState.Scheduler.Kind
+	}
+	if schedulerStatus.Enabled {
+		due, boundary, err := schedule.IsDue(time.Now().In(time.Local), localTime, currentState.LastSuccessfulScheduleBoundary)
+		if err == nil {
+			next := boundary
+			if !due {
+				next = boundary.AddDate(0, 0, 1)
+			}
+			schedulerStatus.NextCheck = &next
+		}
+	}
+	status.Scheduler = schedulerStatus
+	return status
+}
+
+func sortedTargetNames(currentState state.State) []string {
+	names := make([]string, 0, len(currentState.Targets))
+	for name := range currentState.Targets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func (result *doctorResult) addOK(name, detail string) {
@@ -253,6 +375,9 @@ func writeDoctor(stdout, stderr io.Writer, asJSON bool, result doctorResult) int
 		err = encoder.Encode(result)
 	} else {
 		_, err = fmt.Fprintf(stdout, "doctor: %s\n", result.Outcome)
+		if err == nil && result.Status != nil {
+			err = writeDoctorStatus(stdout, result.Status)
+		}
 		for _, check := range result.Checks {
 			if err != nil {
 				break
@@ -271,12 +396,58 @@ func writeDoctor(stdout, stderr io.Writer, asJSON bool, result doctorResult) int
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
-		return 1
+		return exitFailure
 	}
-	if result.Outcome == "healthy" {
-		return 0
+	if result.Outcome == "healthy" || result.Outcome == "not_configured" {
+		return exitOK
 	}
-	return 1
+	return exitFailure
+}
+
+func writeDoctorStatus(stdout io.Writer, status *doctorStatus) error {
+	if _, err := fmt.Fprintln(stdout, "status:"); err != nil {
+		return err
+	}
+	for _, model := range status.Models {
+		if _, err := fmt.Fprintf(stdout, "  model %s (try: kimi --model '%s')\n", model.ID, model.ID); err != nil {
+			return err
+		}
+	}
+	for _, job := range status.Jobs {
+		outcome := job.Outcome
+		if outcome == "" {
+			outcome = "never run"
+		}
+		line := "  last " + job.Name + ": " + outcome
+		if job.LastAttempt != nil {
+			line += " at " + job.LastAttempt.Local().Format("2006-01-02 15:04")
+		}
+		if job.Error != "" {
+			line += " (" + job.Error + ")"
+		}
+		if _, err := fmt.Fprintln(stdout, line); err != nil {
+			return err
+		}
+	}
+	if scheduler := status.Scheduler; scheduler != nil {
+		line := ""
+		switch {
+		case !scheduler.Enabled:
+			line = "  daily check: disabled"
+		default:
+			line = "  daily check: at " + scheduler.LocalTime
+			if scheduler.Kind == "" {
+				line += " (not installed)"
+			}
+			if scheduler.NextCheck != nil {
+				line += ", next " + scheduler.NextCheck.Local().Format("2006-01-02 15:04")
+			}
+		}
+		if _, err := fmt.Fprintln(stdout, line); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseDoctorOptions(arguments []string) (doctorOptions, error) {
@@ -295,5 +466,12 @@ func parseDoctorOptions(arguments []string) (doctorOptions, error) {
 }
 
 func printDoctorUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: spolia doctor [--json]")
+	fmt.Fprintln(writer, `usage: spolia doctor [--json]
+
+Shows what spolia currently manages and checks that everything is working.
+Read-only: doctor never changes any file.
+
+  --json  print the result as JSON
+
+Example: spolia doctor`)
 }
