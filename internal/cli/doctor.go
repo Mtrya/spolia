@@ -175,6 +175,7 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 			result.addOK("catalog:"+job.Source, job.Outcome)
 		}
 	}
+	conflictedModels := make(map[string]bool)
 	if stateErr == nil && stateExists {
 		targetName, targetErr := onlyKimiTarget(configuration)
 		if targetErr != nil {
@@ -184,6 +185,9 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 			for _, conflict := range kimicode.InspectOwnership(document, currentState.Targets[targetName]) {
 				name := "managed:" + conflict.Kind + ":" + conflict.ID
 				reported[name] = true
+				if conflict.Kind == "model" {
+					conflictedModels[conflict.ID] = true
+				}
 				result.addError(name, conflict.Reason, "Resolve the conflicting target edit, then rerun doctor.")
 			}
 			requirements := providerRequirements(ctx, credentials, providers)
@@ -191,6 +195,9 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 			if len(plan.Conflicts) > 0 {
 				for _, conflict := range plan.Conflicts {
 					name := "managed:" + conflict.Kind + ":" + conflict.ID
+					if conflict.Kind == "model" {
+						conflictedModels[conflict.ID] = true
+					}
 					if !reported[name] {
 						result.addError(name, conflict.Reason, "Resolve the conflicting target edit, then rerun doctor.")
 					}
@@ -207,7 +214,7 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 	}
 	checkScheduler(ctx, configuration, currentState, stateErr == nil && stateExists, &result)
 	if stateErr == nil && stateExists {
-		result.Status = buildDoctorStatus(configuration, currentState)
+		result.Status = buildDoctorStatus(configuration, currentState, conflictedModels)
 		jobNames := make([]string, 0, len(currentState.Jobs))
 		for jobName := range currentState.Jobs {
 			jobNames = append(jobNames, jobName)
@@ -296,11 +303,16 @@ func reportKimiEnvironment(ctx context.Context, result *doctorResult) {
 
 // buildDoctorStatus summarizes what spolia currently manages from the
 // ownership state: the models present in Kimi Code, each job's last run,
-// and the next scheduled check.
-func buildDoctorStatus(configuration config.Config, currentState state.State) *doctorStatus {
+// and the next scheduled check. Models with an ownership conflict (for
+// example, deleted by the user) are excluded — recommending a `kimi
+// --model` command for an alias known to be absent would mislead.
+func buildDoctorStatus(configuration config.Config, currentState state.State, conflictedModels map[string]bool) *doctorStatus {
 	status := &doctorStatus{}
 	for _, targetName := range sortedTargetNames(currentState) {
 		for alias, owned := range currentState.Targets[targetName].Models {
+			if conflictedModels[alias] {
+				continue
+			}
 			status.Models = append(status.Models, doctorModelStatus{ID: alias, Source: owned.Source, Job: owned.Job})
 		}
 	}

@@ -5,8 +5,10 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Mtrya/spolia/internal/config"
+	"github.com/Mtrya/spolia/internal/state"
 )
 
 func TestSyncOptionsAcceptJobBeforeOrAfterFlags(t *testing.T) {
@@ -103,6 +105,22 @@ func TestHelpOrganizesCommandsByUserGoal(t *testing.T) {
 		if !strings.Contains(out.String(), "Example:") {
 			t.Fatalf("%s --help has no example:\n%s", subcommand, out.String())
 		}
+	}
+}
+
+func TestLastSuccessfulCheckUsesJobTimestamps(t *testing.T) {
+	t.Parallel()
+	if lastSuccessfulCheck(state.New()) != nil {
+		t.Fatal("empty state reported a last check")
+	}
+	early := time.Date(2026, 8, 29, 9, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 8, 29, 17, 30, 0, 0, time.UTC)
+	current := state.New()
+	current.RecordJob("first", "selected", nil, "", early)
+	current.RecordJob("second", "selected", nil, "", late)
+	got := lastSuccessfulCheck(current)
+	if got == nil || !got.Equal(late) {
+		t.Fatalf("lastSuccessfulCheck = %v, want %v", got, late)
 	}
 }
 

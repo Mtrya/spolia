@@ -124,3 +124,63 @@ func TestHumanHintTranslatesAuthenticationFailure(t *testing.T) {
 		t.Fatalf("authentication failure was not translated into a remedy:\n%s", text)
 	}
 }
+
+func TestDryRunSummaryDoesNotAdvertiseUnwrittenModels(t *testing.T) {
+	t.Parallel()
+	input := app.SyncResult{
+		SchemaVersion: 1,
+		Operation:     "sync",
+		DryRun:        true,
+		Outcome:       "success",
+		Jobs: []app.JobResult{{
+			Name:             "openrouter-kimi-code",
+			Source:           "openrouter",
+			Target:           "kimi-code",
+			Outcome:          "selected",
+			Selected:         []app.SelectedModel{{ID: "stealth/example", DisplayName: "Example", Class: "stealth"}},
+			ExclusionSummary: map[string]int{},
+		}},
+		TargetPlans: []app.TargetPlan{{Target: "kimi-code", Write: false}},
+	}
+	var buffer bytes.Buffer
+	if err := Human(&buffer, input); err != nil {
+		t.Fatal(err)
+	}
+	text := buffer.String()
+	if strings.Contains(text, "Try one now") {
+		t.Fatalf("dry run advertised a command for unwritten models:\n%s", text)
+	}
+	if !strings.Contains(text, "no changes were written") || !strings.Contains(text, "stealth/example") {
+		t.Fatalf("dry run summary is unclear:\n%s", text)
+	}
+}
+
+func TestSchedulerWarningWithoutSelectionsDoesNotClaimReadiness(t *testing.T) {
+	t.Parallel()
+	input := app.SyncResult{
+		SchemaVersion: 1,
+		Operation:     "setup",
+		Outcome:       "success",
+		Jobs: []app.JobResult{{
+			Name:             "openrouter-kimi-code",
+			Source:           "openrouter",
+			Target:           "kimi-code",
+			Outcome:          "zero_candidates",
+			Selected:         []app.SelectedModel{},
+			ExclusionSummary: map[string]int{},
+		}},
+		TargetPlans: []app.TargetPlan{{Target: "kimi-code", Write: false}},
+		Schedule:    &app.SchedulePlan{Enabled: true, Status: "error", Error: "no systemd user session"},
+	}
+	var buffer bytes.Buffer
+	if err := Human(&buffer, input); err != nil {
+		t.Fatal(err)
+	}
+	text := buffer.String()
+	if strings.Contains(text, "Models are ready") {
+		t.Fatalf("scheduler warning claimed readiness with zero selections:\n%s", text)
+	}
+	if !strings.Contains(text, "no matching models") || !strings.Contains(text, "Daily scheduling failed") {
+		t.Fatalf("summary is unclear:\n%s", text)
+	}
+}

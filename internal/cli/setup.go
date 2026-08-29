@@ -77,11 +77,7 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 		fmt.Fprintln(stderr, err)
 		return exitFailure
 	}
-	available, err := inspectSourceCredentials(configuration, document, specs)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return exitFailure
-	}
+	available, incompatible := inspectSourceCredentials(configuration, document, specs)
 
 	prompted := map[string]string{}
 	if !options.yes {
@@ -89,7 +85,7 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 			fmt.Fprintln(stderr, "interactive setup requires a terminal; use --yes for the current configuration or stealth-only defaults")
 			return exitFailure
 		}
-		configuration, prompted, err = interviewConfiguration(configuration, options.noSchedule, options.advanced, available, stdout)
+		configuration, prompted, err = interviewConfiguration(configuration, options.noSchedule, options.advanced, available, incompatible, stdout)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return exitFailure
@@ -98,7 +94,14 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 		// Non-interactive setup narrows to the sources that can actually run
 		// instead of demanding a credential for every default source.
 		for jobName, job := range configuration.Jobs {
-			if job.Enabled && !available[job.Source] {
+			if !job.Enabled {
+				continue
+			}
+			if reason, bad := incompatible[job.Source]; bad {
+				job.Enabled = false
+				configuration.Jobs[jobName] = job
+				fmt.Fprintf(stderr, "skipping %s: Kimi Code provider is incompatible (%s)\n", job.Source, reason)
+			} else if !available[job.Source] {
 				job.Enabled = false
 				configuration.Jobs[jobName] = job
 				fmt.Fprintf(stderr, "skipping %s: no credential available; set %s or add the provider in Kimi Code to enable it\n", job.Source, configuration.Sources[job.Source].CredentialEnv)
@@ -113,6 +116,12 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitFailure
+	}
+	for _, job := range jobs {
+		if reason, bad := incompatible[job.Source]; bad {
+			fmt.Fprintf(stderr, "Kimi Code provider %q is incompatible: %s\n", specs[job.Source].ID, reason)
+			return exitFailure
+		}
 	}
 	if len(jobs) == 0 {
 		fmt.Fprintf(stderr, "setup needs at least one enabled source with a credential; set %s, or add a provider in Kimi Code\n", credentialEnvList(configuration))
@@ -228,10 +237,21 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 		result.Schedule.Executable = currentState.Scheduler.ExecutablePath
 	}
 	if schedulerErr != nil {
-		// The models, configuration, and state are already in place; a
-		// scheduling problem must not present the whole setup as failed.
 		result.Schedule.Status = "error"
 		result.Schedule.Error = compactError(schedulerErr.Error())
+		if !configuration.Schedule.Enabled {
+			// Honoring an explicit scheduling opt-out is not optional: the
+			// old schedule would otherwise keep running while the saved
+			// configuration claims it is gone.
+			result.Outcome = "failure"
+			if options.yes {
+				_ = writeSetupResult(stdout, result, options.json)
+			}
+			fmt.Fprintln(stderr, compactError(schedulerErr.Error()))
+			return exitFailure
+		}
+		// A scheduling install problem must not present the whole setup as
+		// failed: the models, configuration, and state are already in place.
 	}
 	if options.yes {
 		if err := writeSetupResult(stdout, result, options.json); err != nil {
@@ -291,17 +311,21 @@ func allProviderSpecs(configuration config.Config) (map[string]kimicode.Provider
 
 // inspectSourceCredentials reports which sources can authenticate right now,
 // either through an existing Kimi Code provider credential or through their
-// environment variable, and rejects incompatible providers early.
-func inspectSourceCredentials(configuration config.Config, document kimicode.Document, specs map[string]kimicode.ProviderSpec) (map[string]bool, error) {
+// environment variable, and separately notes incompatible providers.
+// Incompatibility is not fatal here: it only matters for sources that remain
+// enabled after the interview or the --yes narrowing.
+func inspectSourceCredentials(configuration config.Config, document kimicode.Document, specs map[string]kimicode.ProviderSpec) (map[string]bool, map[string]string) {
 	available := make(map[string]bool, len(specs))
+	incompatible := make(map[string]string)
 	for name, spec := range specs {
 		inspection := document.Provider(spec)
 		if inspection.Exists && !inspection.Compatible {
-			return nil, fmt.Errorf("Kimi Code provider %q is incompatible: %s", spec.ID, inspection.Reason)
+			incompatible[name] = inspection.Reason
+			continue
 		}
 		available[name] = inspection.CredentialExists || os.Getenv(configuration.Sources[name].CredentialEnv) != ""
 	}
-	return available, nil
+	return available, incompatible
 }
 
 // bootstrapCredentials collects the credentials discovery needs before the
@@ -333,14 +357,15 @@ func credentialEnvList(configuration config.Config) string {
 	return strings.Join(names, " or ")
 }
 
-func interviewConfiguration(configuration config.Config, noSchedule, advanced bool, available map[string]bool, writer io.Writer) (config.Config, map[string]string, error) {
+func interviewConfiguration(configuration config.Config, noSchedule, advanced bool, available map[string]bool, incompatible map[string]string, writer io.Writer) (config.Config, map[string]string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	prompted := make(map[string]string)
 	for _, sourceName := range configuration.SourcePriority {
 		jobNames := jobsForSource(configuration, sourceName)
 		for _, jobName := range jobNames {
 			job := configuration.Jobs[jobName]
-			enabled, err := askYesNo(reader, writer, "Enable "+sourceName+"?", job.Enabled && available[sourceName])
+			_, blocked := incompatible[sourceName]
+			enabled, err := askYesNo(reader, writer, "Enable "+sourceName+"?", job.Enabled && available[sourceName] && !blocked)
 			if err != nil {
 				return config.Config{}, nil, err
 			}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -448,6 +449,140 @@ func TestDoctorReportsManagedModelsAndSchedule(t *testing.T) {
 	}
 	if result.Status.Scheduler == nil || result.Status.Scheduler.Enabled {
 		t.Fatalf("status scheduler = %#v", result.Status.Scheduler)
+	}
+}
+
+func TestDoctorStatusExcludesModelsMissingFromTheTarget(t *testing.T) {
+	spoliaHome := t.TempDir()
+	kimiHome := t.TempDir()
+	installation := cliKimi(t, kimiHome)
+	t.Setenv("SPOLIA_HOME", spoliaHome)
+	t.Setenv("KIMI_CODE_HOME", kimiHome)
+	configuration := localOnlyConfiguration()
+	configPath := filepath.Join(spoliaHome, "config.toml")
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installation.ConfigPath, []byte("# valid empty user config\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Ownership claims a managed model that no longer exists in the target:
+	// the user deleted it. The status list must not recommend it.
+	currentState := state.New()
+	currentState.Targets["kimi-code"] = state.TargetState{
+		Path: installation.ConfigPath,
+		Models: map[string]state.ModelOwnership{
+			"stealth/deleted": {Source: "openrouter", Job: "openrouter-kimi-code", Fields: map[string]string{}},
+		},
+	}
+	if err := state.Save(filepath.Join(spoliaHome, "state.json"), currentState); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if exitCode := Run(context.Background(), []string{"doctor", "--json"}, &stdout, &stderr); exitCode != 1 {
+		t.Fatalf("exit code = %d, stderr = %s, stdout = %s", exitCode, stderr.String(), stdout.String())
+	}
+	var result doctorResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status == nil || len(result.Status.Models) != 0 {
+		t.Fatalf("status still recommends a deleted model: %#v", result.Status)
+	}
+	found := false
+	for _, check := range result.Checks {
+		if check.Name == "managed:model:stealth/deleted" && check.Status == "error" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("missing-model conflict was not reported: %#v", result.Checks)
+	}
+}
+
+func TestSetupYesSkipsAnIncompatibleProviderForAnUnrelatedSource(t *testing.T) {
+	spoliaHome := t.TempDir()
+	kimiHome := t.TempDir()
+	installation := cliKimi(t, kimiHome)
+	t.Setenv("SPOLIA_HOME", spoliaHome)
+	t.Setenv("KIMI_CODE_HOME", kimiHome)
+	t.Setenv("ZENMUX_API_KEY", "")
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
+	// A user-owned zenmux provider with a different base URL is incompatible
+	// with spolia's mapping, but must not block an OpenRouter-only setup.
+	provider := `[providers.zenmux]
+type = "openai"
+base_url = "https://example.com/v1"
+api_key = "user-owned-key"
+`
+	if err := os.WriteFile(installation.ConfigPath, []byte(provider), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fixture, err := os.ReadFile(filepath.Join("..", "testdata", "openrouter-models.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write(fixture)
+	}))
+	defer server.Close()
+	t.Setenv("SPOLIA_TEST_OPENROUTER_MODELS_ENDPOINT", server.URL)
+
+	var stdout, stderr bytes.Buffer
+	if exitCode := Run(context.Background(), []string{"setup", "--yes", "--json", "--no-schedule"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("exit code = %d, stderr = %s, stdout = %s", exitCode, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "skipping zenmux") {
+		t.Fatalf("incompatible unrelated provider was not skipped: stderr = %s", stderr.String())
+	}
+	var result app.SyncResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != "success" {
+		t.Fatalf("outcome = %q", result.Outcome)
+	}
+	targetAfter, _ := os.ReadFile(installation.ConfigPath)
+	if !strings.Contains(string(targetAfter), "user-owned-key") {
+		t.Fatal("the user-owned provider was modified")
+	}
+}
+
+func TestSetupFailsWhenSchedulingOptOutCannotBeApplied(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the kind-mismatch failure path is exercised on linux")
+	}
+	spoliaHome := t.TempDir()
+	kimiHome := t.TempDir()
+	cliKimi(t, kimiHome)
+	t.Setenv("SPOLIA_HOME", spoliaHome)
+	t.Setenv("KIMI_CODE_HOME", kimiHome)
+	t.Setenv("ZENMUX_API_KEY", "")
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
+	fixture, err := os.ReadFile(filepath.Join("..", "testdata", "openrouter-models.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write(fixture)
+	}))
+	defer server.Close()
+	t.Setenv("SPOLIA_TEST_OPENROUTER_MODELS_ENDPOINT", server.URL)
+	// An existing scheduler record this platform cannot remove: opting out
+	// must fail loudly rather than leave the old daily task running.
+	currentState := state.New()
+	currentState.Scheduler = &state.SchedulerState{Kind: "launchd", Identifier: schedule.DefaultIdentifier, ExecutablePath: "/usr/bin/true", LocalTime: "09:00"}
+	if err := state.Save(filepath.Join(spoliaHome, "state.json"), currentState); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if exitCode := Run(context.Background(), []string{"setup", "--yes", "--no-schedule"}, &stdout, &stderr); exitCode != 1 {
+		t.Fatalf("exit code = %d, stderr = %s, stdout = %s", exitCode, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "does not match") {
+		t.Fatalf("scheduler failure was not surfaced: stderr = %s", stderr.String())
 	}
 }
 

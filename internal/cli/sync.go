@@ -194,7 +194,12 @@ func writeNotDue(stdout, stderr io.Writer, options syncOptions, configuration co
 		next = boundary.AddDate(0, 0, 1)
 	}
 	result := app.SyncResult{SchemaVersion: app.ResultSchemaVersion, Operation: "sync", Outcome: "not_due", Jobs: []app.JobResult{}, TargetPlans: []app.TargetPlan{}}
-	result.LastCheck = currentState.LastSuccessfulScheduleBoundary
+	// The boundary records which scheduled slot was satisfied, not when the
+	// check ran; the jobs' success timestamps carry the real time.
+	result.LastCheck = lastSuccessfulCheck(currentState)
+	if result.LastCheck == nil {
+		result.LastCheck = currentState.LastSuccessfulScheduleBoundary
+	}
 	if !next.IsZero() {
 		result.NextCheck = &next
 	}
@@ -216,6 +221,19 @@ func writeNotDue(stdout, stderr io.Writer, options syncOptions, configuration co
 		fmt.Fprintf(stdout, "next check %s\n", result.NextCheck.Local().Format("2006-01-02 15:04"))
 	}
 	return exitOK
+}
+
+// lastSuccessfulCheck returns the most recent per-job success timestamp,
+// which records when a check actually ran rather than the schedule boundary
+// it satisfied.
+func lastSuccessfulCheck(currentState state.State) *time.Time {
+	var latest *time.Time
+	for _, jobState := range currentState.Jobs {
+		if jobState.LastSuccess != nil && (latest == nil || jobState.LastSuccess.After(*latest)) {
+			latest = jobState.LastSuccess
+		}
+	}
+	return latest
 }
 
 func appTargetError(targetName string, err error) app.TargetConflict {

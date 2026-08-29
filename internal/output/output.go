@@ -123,16 +123,30 @@ func Summary(writer io.Writer, result app.SyncResult) error {
 	selected := selectedIDs(result)
 	if result.Outcome != "failure" && result.Outcome != "partial_failure" {
 		if len(selected) > 0 {
-			if _, err := fmt.Fprintln(writer, "Models ready in Kimi Code:"); err != nil {
-				return err
-			}
-			for _, id := range selected {
-				if _, err := fmt.Fprintf(writer, "  %s\n", id); err != nil {
+			if result.DryRun {
+				if _, err := fmt.Fprintln(writer, "Dry run: no changes were written. These models would become available in Kimi Code:"); err != nil {
 					return err
 				}
-			}
-			if _, err := fmt.Fprintf(writer, "Try one now: kimi --model '%s'\n", selected[0]); err != nil {
-				return err
+				for _, id := range selected {
+					if _, err := fmt.Fprintf(writer, "  %s\n", id); err != nil {
+						return err
+					}
+				}
+				if _, err := fmt.Fprintln(writer, "Run spolia sync without --dry-run to apply them."); err != nil {
+					return err
+				}
+			} else {
+				if _, err := fmt.Fprintln(writer, "Models ready in Kimi Code:"); err != nil {
+					return err
+				}
+				for _, id := range selected {
+					if _, err := fmt.Fprintf(writer, "  %s\n", id); err != nil {
+						return err
+					}
+				}
+				if _, err := fmt.Fprintf(writer, "Try one now: kimi --model '%s'\n", selected[0]); err != nil {
+					return err
+				}
 			}
 		} else {
 			conclusion := "No matching models are available right now."
@@ -157,7 +171,12 @@ func Summary(writer io.Writer, result app.SyncResult) error {
 	if result.Schedule != nil {
 		switch {
 		case result.Schedule.Status == "error" || result.Schedule.Error != "":
-			if _, err := fmt.Fprintf(writer, "Daily scheduling failed: %s. Models are ready; rerun spolia setup --no-schedule or fix the cause.\n", result.Schedule.Error); err != nil {
+			message := fmt.Sprintf("Daily scheduling failed: %s.", result.Schedule.Error)
+			if len(selected) > 0 {
+				message += " Models are ready;"
+			}
+			message += " Rerun spolia setup --no-schedule or fix the cause."
+			if _, err := fmt.Fprintln(writer, message); err != nil {
 				return err
 			}
 		case result.Schedule.Enabled && result.Schedule.Status != "disabled" && result.Schedule.Status != "removed":
@@ -205,12 +224,14 @@ func nothingWritten(result app.SyncResult) bool {
 }
 
 // catalogErrorHint translates common catalog fetch failures into the action
-// that resolves them. The raw error stays on the detail line above.
+// that resolves them. The raw error stays on the detail line above. Stored
+// Kimi Code credentials take precedence over the environment, so an
+// authentication failure always points at the stored credential.
 func catalogErrorHint(job app.JobResult) string {
 	switch {
 	case strings.Contains(job.Error, "HTTP 401") || strings.Contains(job.Error, "HTTP 403"):
 		if job.CredentialEnv != "" {
-			return fmt.Sprintf("the %s API key was rejected; update the provider credential in Kimi Code or set %s and retry", job.Source, job.CredentialEnv)
+			return fmt.Sprintf("the %s API key was rejected; update the %s provider credential in Kimi Code's config.toml, or remove it and rerun spolia setup with a fresh %s", job.Source, job.Source, job.CredentialEnv)
 		}
 		return fmt.Sprintf("the %s API key was rejected; update the provider credential in Kimi Code and retry", job.Source)
 	case strings.Contains(job.Error, "Timeout") || strings.Contains(job.Error, "deadline exceeded") || strings.Contains(job.Error, "no such host") || strings.Contains(job.Error, "connection refused"):
