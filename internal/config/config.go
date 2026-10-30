@@ -35,7 +35,9 @@ type Source struct {
 }
 
 type Target struct {
-	Adapter string `toml:"adapter"`
+	Adapter    string `toml:"adapter"`
+	Executable string `toml:"executable,omitempty"`
+	Home       string `toml:"home,omitempty"`
 }
 
 type Job struct {
@@ -166,6 +168,12 @@ func (configuration Config) Validate() error {
 	for targetName, targetConfig := range configuration.Targets {
 		if targetConfig.Adapter == "" {
 			return fmt.Errorf("target %q has no adapter", targetName)
+		}
+		if targetConfig.Executable != "" && !filepath.IsAbs(targetConfig.Executable) {
+			return fmt.Errorf("target %q executable must be an absolute path", targetName)
+		}
+		if targetConfig.Home != "" && !filepath.IsAbs(targetConfig.Home) {
+			return fmt.Errorf("target %q home must be an absolute path", targetName)
 		}
 	}
 

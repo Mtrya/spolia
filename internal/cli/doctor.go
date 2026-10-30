@@ -117,9 +117,14 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 	} else {
 		result.addError("process_lock", lockErr.Error(), "Check the spolia home directory permissions.")
 	}
-	installation, installationErr := kimicode.Discover(ctx)
+	if configErr == nil {
+		checkScheduler(ctx, configuration, currentState, stateErr == nil && stateExists, &result)
+	}
+	targetName, _ := onlyKimiTarget(configuration)
+	target := configuration.Targets[targetName]
+	installation, installationErr := kimicode.Discover(ctx, target.Executable, target.Home)
 	if installationErr != nil {
-		result.addError("kimi_code", installationErr.Error(), "Install a supported Kimi Code release and ensure kimi is in PATH.")
+		result.addError("kimi_code", installationErr.Error(), "Install a supported Kimi Code release and rerun spolia setup to update its saved location.")
 		return writeDoctor(stdout, stderr, options.json, result)
 	}
 	result.addOK("kimi_code", fmt.Sprintf("version %s at %s", installation.Version, installation.Binary))
@@ -212,7 +217,6 @@ func runDoctor(ctx context.Context, arguments []string, stdout, stderr io.Writer
 			}
 		}
 	}
-	checkScheduler(ctx, configuration, currentState, stateErr == nil && stateExists, &result)
 	if stateErr == nil && stateExists {
 		result.Status = buildDoctorStatus(configuration, currentState, conflictedModels)
 		jobNames := make([]string, 0, len(currentState.Jobs))
@@ -273,6 +277,8 @@ func checkScheduler(ctx context.Context, configuration config.Config, currentSta
 		result.addError("scheduler", inspection.Detail, "Restore the scheduler definition or rerun spolia setup after reviewing the edit.")
 	case !inspection.Enabled:
 		result.addError("scheduler", inspection.Detail, "Run spolia setup to enable the native schedule.")
+	case inspection.Status == "failed":
+		result.addError("scheduler", inspection.Detail, "Check journalctl --user -u "+inspection.Identifier+".service; rerun spolia setup to refresh the Kimi Code location, then start the service again.")
 	case currentState.Scheduler.ExecutablePath != desired.Executable || currentState.Scheduler.LocalTime != desired.LocalTime:
 		result.addError("scheduler", "the installed schedule does not match the current executable path or configured time", "Run spolia setup to update the native schedule.")
 	default:
@@ -293,7 +299,7 @@ func checkScheduler(ctx context.Context, configuration config.Config, currentSta
 // depend on a spolia configuration, so a first-run doctor still tells the
 // user whether the required binary is present.
 func reportKimiEnvironment(ctx context.Context, result *doctorResult) {
-	installation, err := kimicode.Discover(ctx)
+	installation, err := kimicode.Discover(ctx, "", "")
 	if err != nil {
 		result.addError("kimi_code", err.Error(), "Install a supported Kimi Code release and ensure kimi is in PATH.")
 		return

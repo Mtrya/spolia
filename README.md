@@ -98,6 +98,8 @@ If setup completes with no matching models, that is a normal temporary state: th
 
 Setup installs one daily per-user schedule: a systemd user timer on Linux, a LaunchAgent on macOS, or a Task Scheduler task on Windows. It runs `spolia sync --if-due --quiet`, which performs metadata discovery only and never starts an inference turn. You can always refresh by hand with `spolia sync`.
 
+Setup saves the absolute Kimi Code executable and home directory so background checks use the same installation even when the scheduler has a different `PATH`. After upgrading from a version that did not save these locations, or moving your Kimi installation, rerun `spolia setup` from a terminal where `kimi` works. On Linux, `spolia doctor` also reports a failed scheduled service; inspect its output with `journalctl --user -u io.github.mtrya.spolia.service`.
+
 ## Status, customization, troubleshooting
 
 `spolia doctor` shows what spolia currently manages — the models in Kimi Code, each job's last run, the next scheduled check — followed by health checks with a concrete remedy for anything broken.

@@ -87,6 +87,20 @@ func TestDefaultConfigurationSavesAndLoads(t *testing.T) {
 	}
 }
 
+func TestTargetLocationsMustBeAbsolute(t *testing.T) {
+	t.Parallel()
+	for _, target := range []Target{
+		{Adapter: "kimi-code", Executable: "bin/kimi"},
+		{Adapter: "kimi-code", Home: ".kimi-code"},
+	} {
+		configuration := Default()
+		configuration.Targets["kimi-code"] = target
+		if err := configuration.Validate(); err == nil {
+			t.Fatalf("relative target location accepted: %#v", target)
+		}
+	}
+}
+
 func TestScheduleTimeRequiresCanonicalHourAndMinute(t *testing.T) {
 	t.Parallel()
 	configuration := Default()

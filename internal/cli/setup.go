@@ -62,7 +62,7 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 	}
 
 	stage(stderr, options.json, "Checking Kimi Code...")
-	installation, err := kimicode.Discover(ctx)
+	installation, err := kimicode.Discover(ctx, "", "")
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitFailure
@@ -132,6 +132,10 @@ func runSetup(ctx context.Context, arguments []string, stdout, stderr io.Writer)
 		fmt.Fprintln(stderr, err)
 		return exitFailure
 	}
+	target := configuration.Targets[targetName]
+	target.Executable = installation.Binary
+	target.Home = installation.Home
+	configuration.Targets[targetName] = target
 	bootstrap := bootstrapCredentials(configuration, document, specs, prompted)
 
 	lock, err := state.AcquireLock(config.LockPath(configPath))

@@ -136,6 +136,7 @@ func (manager Manager) Inspect(ctx context.Context, definition Definition) (Insp
 	}
 	activeOutput, activeErr := schedulerCommand(ctx, "systemctl", "--user", "is-active", manager.identifier+".timer")
 	if activeErr != nil || strings.TrimSpace(activeOutput) != "active" {
+		inspection.Enabled = false
 		inspection.Status = "inactive"
 		inspection.Detail = commandFailure(activeOutput, activeErr)
 		return inspection, nil
@@ -144,6 +145,15 @@ func (manager Manager) Inspect(ctx context.Context, definition Definition) (Insp
 	if !inspection.Matches {
 		inspection.Status = "changed"
 		inspection.Detail = "the systemd unit definition differs from the configured schedule"
+		return inspection, nil
+	}
+	result, err := schedulerCommand(ctx, "systemctl", "--user", "show", manager.identifier+".service", "--property=Result", "--value")
+	if err != nil {
+		return Inspection{}, fmt.Errorf("inspect systemd service result: %s", commandFailure(result, err))
+	}
+	if result != "success" && result != "" {
+		inspection.Status = "failed"
+		inspection.Detail = "the last scheduled sync failed: " + result
 	}
 	return inspection, nil
 }

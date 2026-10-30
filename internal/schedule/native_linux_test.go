@@ -49,6 +49,7 @@ func TestNativeSystemdLifecycle(t *testing.T) {
 	}
 	ctx := context.Background()
 	defer func() {
+		_, _ = schedulerCommand(ctx, "systemctl", "--user", "reset-failed", identifier+".service")
 		if _, err := manager.Remove(ctx); err != nil {
 			t.Errorf("cleanup scheduler: %v", err)
 		}
@@ -71,6 +72,34 @@ func TestNativeSystemdLifecycle(t *testing.T) {
 	}
 	if !inspection.Matches {
 		t.Fatalf("updated inspection = %#v", inspection)
+	}
+	failingExecutable, err := exec.LookPath("false")
+	if err != nil {
+		t.Fatal(err)
+	}
+	failing := Definition{Executable: failingExecutable, LocalTime: "09:06"}
+	if _, err := manager.Install(ctx, failing); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := schedulerCommand(ctx, "systemctl", "--user", "start", identifier+".service"); err == nil {
+		t.Fatal("failing service succeeded")
+	}
+	inspection, err = manager.Inspect(ctx, failing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !inspection.Enabled || !inspection.Matches || inspection.Status != "failed" {
+		t.Fatalf("failed service was hidden by active timer: %#v", inspection)
+	}
+	if _, err := manager.Install(ctx, updated); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := schedulerCommand(ctx, "systemctl", "--user", "start", identifier+".service"); err != nil {
+		t.Fatalf("restart service: %s", commandFailure(output, err))
+	}
+	inspection, err = manager.Inspect(ctx, updated)
+	if err != nil || inspection.Status != "enabled" {
+		t.Fatalf("recovered service: inspection=%#v err=%v", inspection, err)
 	}
 	removed, err := manager.Remove(ctx)
 	if err != nil || !removed {

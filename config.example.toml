@@ -21,6 +21,7 @@ credential_env = "ZENMUX_API_KEY"
 
 [targets.kimi-code]
 adapter = "kimi-code"
+# Setup fills executable and home with absolute paths for background sync.
 
 [jobs.openrouter-kimi-code]
 enabled = true

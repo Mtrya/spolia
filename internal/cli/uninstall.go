@@ -100,7 +100,8 @@ func runUninstall(ctx context.Context, arguments []string, stdout, stderr io.Wri
 		}
 		adapter = configuration.Targets[targetName].Adapter
 	}
-	installation, err := kimicode.Discover(ctx)
+	target := configuration.Targets[targetName]
+	installation, err := kimicode.Discover(ctx, target.Executable, target.Home)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitFailure
