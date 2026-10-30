@@ -41,16 +41,21 @@ func ProviderForSource(sourceName string) (ProviderSpec, error) {
 	return specification, nil
 }
 
-func Discover(ctx context.Context) (Installation, error) {
-	binary, err := exec.LookPath("kimi")
-	if err != nil {
-		return Installation{}, fmt.Errorf("Kimi Code executable not found in PATH; install Kimi Code %s or newer first (https://www.kimi.com/code/docs/en/)", MinimumVersion)
+func Discover(ctx context.Context, binary, home string) (Installation, error) {
+	if binary == "" {
+		var err error
+		binary, err = exec.LookPath("kimi")
+		if err != nil {
+			return Installation{}, fmt.Errorf("Kimi Code executable not found in PATH; install Kimi Code %s or newer first (https://www.kimi.com/code/docs/en/)", MinimumVersion)
+		}
 	}
-	binary, err = filepath.Abs(binary)
+	binary, err := filepath.Abs(binary)
 	if err != nil {
 		return Installation{}, fmt.Errorf("resolve Kimi Code executable: %w", err)
 	}
-	home := os.Getenv("KIMI_CODE_HOME")
+	if home == "" {
+		home = os.Getenv("KIMI_CODE_HOME")
+	}
 	if home == "" {
 		userHome, err := os.UserHomeDir()
 		if err != nil {

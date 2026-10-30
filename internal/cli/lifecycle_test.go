@@ -356,10 +356,10 @@ func TestSetupYesSkipsSourcesWithoutCredentials(t *testing.T) {
 	}
 }
 
-func TestSetupYesSucceedsWithOneCredentialAndSchedulerWarning(t *testing.T) {
+func TestSetupPersistsKimiForScheduledSyncWithoutPATH(t *testing.T) {
 	spoliaHome := t.TempDir()
 	kimiHome := t.TempDir()
-	cliKimi(t, kimiHome)
+	installation := cliKimi(t, kimiHome)
 	t.Setenv("SPOLIA_HOME", spoliaHome)
 	t.Setenv("KIMI_CODE_HOME", kimiHome)
 	t.Setenv("ZENMUX_API_KEY", "")
@@ -401,6 +401,85 @@ func TestSetupYesSucceedsWithOneCredentialAndSchedulerWarning(t *testing.T) {
 	}
 	if saved.Jobs["zenmux-kimi-code"].Enabled {
 		t.Fatal("the uncredentialed zenmux job stayed enabled in the saved configuration")
+	}
+	target := saved.Targets["kimi-code"]
+	if target.Executable != installation.Binary || target.Home != installation.Home {
+		t.Fatalf("saved target = %#v", target)
+	}
+
+	// Setup satisfies today's boundary. Make the next invocation due so it
+	// must discover Kimi, fetch the catalog and validate the target again.
+	statePath := config.StatePath(filepath.Join(spoliaHome, "config.toml"))
+	currentState, err := state.Load(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousAttempt := currentState.Jobs["openrouter-kimi-code"].LastAttempt
+	currentState.LastSuccessfulScheduleBoundary = nil
+	if err := state.Save(statePath, currentState); err != nil {
+		t.Fatal(err)
+	}
+	originalPath := os.Getenv("PATH")
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("KIMI_CODE_HOME", t.TempDir())
+	t.Setenv("OPENROUTER_API_KEY", "")
+	stdout.Reset()
+	stderr.Reset()
+	if exitCode := Run(context.Background(), []string{"sync", "--if-due", "--quiet"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("scheduled sync exit code = %d, stderr = %s", exitCode, stderr.String())
+	}
+	if stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("quiet sync: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	after, err := state.Load(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := after.Jobs["openrouter-kimi-code"]
+	if after.LastSuccessfulScheduleBoundary == nil || job.LastSuccess == nil || !job.LastSuccess.After(*previousAttempt) || len(job.SelectedIDs) == 0 {
+		t.Fatalf("scheduled sync did not refresh models: %#v", after)
+	}
+	if after.Targets["kimi-code"].Path != installation.ConfigPath {
+		t.Fatalf("sync used another Kimi home: %#v", after.Targets["kimi-code"])
+	}
+
+	// Doctor and uninstall must inspect the same saved installation.
+	saved.Schedule.Enabled = false
+	if err := config.Save(filepath.Join(spoliaHome, "config.toml"), saved); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"doctor", "--json"}, {"uninstall", "--dry-run", "--json"}} {
+		stdout.Reset()
+		stderr.Reset()
+		if exitCode := Run(context.Background(), args, &stdout, &stderr); exitCode != 0 {
+			t.Fatalf("%v exit code = %d, stderr = %s, stdout = %s", args, exitCode, stderr.String(), stdout.String())
+		}
+	}
+
+	// A stale saved path must fail rather than silently choose another Kimi.
+	t.Setenv("PATH", originalPath)
+	target.Executable = filepath.Join(t.TempDir(), "missing-kimi")
+	saved.Targets["kimi-code"] = target
+	if err := config.Save(filepath.Join(spoliaHome, "config.toml"), saved); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if exitCode := Run(context.Background(), []string{"sync", "--dry-run"}, &stdout, &stderr); exitCode != 1 {
+		t.Fatalf("sync accepted a missing configured executable: exit=%d stdout=%s", exitCode, stdout.String())
+	}
+	t.Setenv("KIMI_CODE_HOME", kimiHome)
+	stdout.Reset()
+	stderr.Reset()
+	if exitCode := Run(context.Background(), []string{"setup", "--yes", "--json"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("setup did not repair the saved executable: exit=%d stderr=%s stdout=%s", exitCode, stderr.String(), stdout.String())
+	}
+	repaired, err := config.Load(filepath.Join(spoliaHome, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repaired.Targets["kimi-code"].Executable != installation.Binary {
+		t.Fatalf("setup retained the stale executable: %#v", repaired.Targets["kimi-code"])
 	}
 }
 

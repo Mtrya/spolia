@@ -117,7 +117,8 @@ func runSync(ctx context.Context, arguments []string, stdout, stderr io.Writer) 
 			return writeNotDue(stdout, stderr, options, configuration, currentState)
 		}
 	}
-	installation, err := kimicode.Discover(ctx)
+	target := configuration.Targets[targetName]
+	installation, err := kimicode.Discover(ctx, target.Executable, target.Home)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitFailure
